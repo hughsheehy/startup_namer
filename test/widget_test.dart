@@ -304,8 +304,8 @@ void main() {
     // Each name shows each ending, with the full sentence as its tooltip.
     final first = tester.widget<Text>(find.descendant(of: find.byType(ListTile).first, matching: find.byType(Text)).first).data!.toLowerCase();
     expect(find.byTooltip('$first.com is free'), findsOneWidget);
-    expect(find.byTooltip('$first.ai is taken'), findsOneWidget);
-    expect(find.byTooltip('$first.dev is taken'), findsOneWidget);
+    expect(find.byTooltip('$first.ai is taken: tap for details'), findsOneWidget);
+    expect(find.byTooltip('$first.dev is taken: tap for details'), findsOneWidget);
     await tester.pump(const Duration(seconds: 30));
   });
 
@@ -364,6 +364,35 @@ void main() {
     final faq = tester.widget<Link>(find.ancestor(of: find.text('FAQ'), matching: find.byType(Link)));
     expect(faq.uri.toString(), 'faq');
     expect(faq.target, LinkTarget.blank);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('tapping a taken domain shows what its registry says, and links to its site', (tester) async {
+    tall(tester);
+    final client = MockClient((request) async {
+      final domain = request.url.pathSegments.last;
+      final body = '{"events": [{"eventAction": "registration", "eventDate": "2019-07-10T12:00:00Z"}, '
+          '{"eventAction": "expiration", "eventDate": "2099-07-10T12:00:00Z"}], '
+          '"entities": [{"roles": ["registrar"], "vcardArray": ["vcard", [["fn", {}, "text", "GoDaddy.com, LLC"]]]}], '
+          '"nameservers": [{"ldhName": "NS1.ATOM.COM"}], "ldhName": "$domain"}';
+      return http.Response(body, 200);
+    });
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.pump(const Duration(seconds: 5));
+    final taken = find.textContaining('.com is taken').first;
+    final domain = tester.widget<Text>(taken).data!.split(' ').first;
+    await tester.tap(taken);
+    await tester.pumpAndSettle();
+    expect(find.text(domain), findsOneWidget);
+    expect(find.text('10 July 2019'), findsOneWidget);
+    expect(find.text('GoDaddy.com, LLC'), findsOneWidget);
+    expect(find.textContaining('with Atom, a domain marketplace'), findsOneWidget);
+    final visit = tester.widget<Link>(find.ancestor(of: find.text('Visit $domain'), matching: find.byType(Link)));
+    expect(visit.uri.toString(), 'https://$domain');
+    expect(visit.target, LinkTarget.blank);
+    expect(find.byIcon(Icons.favorite), findsNothing); // Tapping the domain doesn't save the name.
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 30));
   });
 }

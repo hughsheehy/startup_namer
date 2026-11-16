@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -55,6 +56,90 @@ Tld tldOf(String domain) {
 /// What a registry says about a domain.
 enum Availability { checking, free, taken, unknown }
 
+/// What a registry's record says about a taken domain: when it was registered
+/// and runs to, through which registrar, its name servers and status. Any of
+/// them may be missing.
+class DomainRecord {
+  const DomainRecord({this.registered, this.expires, this.registrar, this.nameservers = const [], this.status = const []});
+
+  final DateTime? registered;
+  final DateTime? expires;
+  final String? registrar;
+
+  /// In lower case, like "ns1.atom.com".
+  final List<String> nameservers;
+
+  /// RDAP's status values, like "client transfer prohibited" or "pending delete".
+  final List<String> status;
+
+  /// Reads an RDAP domain record, or nothing if it isn't one.
+  static DomainRecord? parse(String body) {
+    try {
+      final json = jsonDecode(body);
+      if (json is! Map<String, dynamic>) return null;
+      DateTime? event(String action) {
+        for (final event in json['events'] as List? ?? const []) {
+          if (event is Map && event['eventAction'] == action) return DateTime.tryParse('${event['eventDate']}');
+        }
+        return null;
+      }
+
+      String? registrar;
+      for (final entity in json['entities'] as List? ?? const []) {
+        if (entity is! Map || !(entity['roles'] as List? ?? const []).contains('registrar')) continue;
+        final card = entity['vcardArray'];
+        if (card is List && card.length > 1 && card[1] is List) {
+          for (final field in card[1] as List) {
+            if (field is List && field.length > 3 && field[0] == 'fn' && field[3] is String) registrar = field[3] as String;
+          }
+        }
+      }
+      return DomainRecord(
+        registered: event('registration'),
+        expires: event('expiration'),
+        registrar: registrar,
+        nameservers: [
+          for (final server in json['nameservers'] as List? ?? const [])
+            if (server is Map && server['ldhName'] is String)
+              (server['ldhName'] as String).toLowerCase().replaceAll(RegExp(r'\.$'), ''),
+        ],
+        status: [for (final value in json['status'] as List? ?? const []) if (value is String) value],
+      );
+    } catch (_) {
+      return null; // Not JSON, or not shaped like a record: no details, but still taken.
+    }
+  }
+
+  /// The domain marketplace or parking service its name servers are with, if
+  /// it's one of the well-known ones, and whether that's a marketplace (where
+  /// it's probably for sale) rather than parking (where the owner may sell).
+  ({String name, bool marketplace})? get market {
+    for (final server in nameservers) {
+      for (final MapEntry(key: host, value: market) in _markets.entries) {
+        if (server == host || server.endsWith('.$host')) return market;
+      }
+    }
+    return null;
+  }
+
+  /// Whether the registry is deleting it, so it may soon be free.
+  bool get beingDeleted => status.any((value) => value.contains('pending delete') || value.contains('redemption'));
+}
+
+/// Name servers of domain marketplaces and parking services.
+const _markets = <String, ({String name, bool marketplace})>{
+  'atom.com': (name: 'Atom', marketplace: true),
+  'squadhelp.com': (name: 'Atom', marketplace: true),
+  'sedoparking.com': (name: 'Sedo', marketplace: true),
+  'afternic.com': (name: 'Afternic', marketplace: true),
+  'dan.com': (name: 'Dan.com', marketplace: true),
+  'hugedomains.com': (name: 'HugeDomains', marketplace: true),
+  'undeveloped.com': (name: 'Undeveloped', marketplace: true),
+  'bodis.com': (name: 'Bodis', marketplace: false),
+  'parkingcrew.net': (name: 'ParkingCrew', marketplace: false),
+  'above.com': (name: 'Above.com', marketplace: false),
+};
+
 /// What keeps going wrong with a registry's checks, if anything.
 enum Trouble {
   none,
@@ -94,6 +179,9 @@ class DomainChecker extends ChangeNotifier {
   /// The answer so far for `name` (letters only, like "neatchip") under [tld],
   /// asking if it's new.
   Availability statusOf(String name, Tld tld) => registryFor(tld).statusOf('$name.${tld.name}');
+
+  /// What the registry's record says about a taken domain, if it said.
+  DomainRecord? recordOf(String name, Tld tld) => registryFor(tld).recordOf('$name.${tld.name}');
 
   /// Asks again, now, about a domain that couldn't be checked.
   void retry(String name, Tld tld) => registryFor(tld).retry('$name.${tld.name}');
@@ -148,6 +236,7 @@ class RegistryChecker extends ChangeNotifier {
   final String host;
   final http.Client _client;
   final Map<String, Availability> _found = {};
+  final Map<String, DomainRecord> _records = {};
   final Queue<String> _waiting = Queue();
   final Set<String> _endings = {};
   int _running = 0;
@@ -183,6 +272,9 @@ class RegistryChecker extends ChangeNotifier {
 
   /// How many domains so far couldn't be checked.
   int get unchecked => _found.values.where((status) => status == Availability.unknown).length;
+
+  /// What the registry's record says about a taken `domain`, if it said.
+  DomainRecord? recordOf(String domain) => _records[domain];
 
   /// The answer so far for `domain` (like "neatchip.com"), asking if it's new.
   Availability statusOf(String domain) {
@@ -240,6 +332,10 @@ class RegistryChecker extends ChangeNotifier {
       case 404 || 200:
         _backOff = Duration.zero;
         if (!counted) _problemsInARow = 0; // A quick answer: all's well again.
+        if (response.statusCode == 200) {
+          final record = DomainRecord.parse(response.body);
+          if (record != null) _records[domain] = record;
+        }
         _answer(domain, response.statusCode == 404 ? Availability.free : Availability.taken);
       case 429 || 503:
         // Asked too often, or too busy: ask again, after a pause.

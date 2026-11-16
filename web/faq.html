@@ -72,7 +72,7 @@
 
   <main>
     <h2>What is Startup Names?</h2>
-    <p>It makes two-word names for a company or product, like BrightRiver or StoneVector, and checks whether each one's domain is free. Scroll for more names, tap a name to save it, and use the list button at the top to see the names you've saved.</p>
+    <p>It makes two-word names for a company or product, like BrightRiver or StoneVector, and checks whether each one's domain is free. Scroll for more names, tap a name to save it, and use the list button at the top to see the names you've saved. Tap a taken domain to see who registered it and until when.</p>
 
     <h2>Where do the words come from?</h2>
     <p>From lists of the most used English adjectives and nouns (829 adjectives and 2,537 nouns, from the <a href="https://pub.dev/packages/english_words">english_words</a> package). Words that could offend are left out, and so are words the lists capitalize: names of religions, nationalities and people.</p>
@@ -121,6 +121,17 @@
       <li><strong>.de</strong>: the registry, DENIC, has an RDAP service, but doesn't let web pages read its answers.</li>
       <li><strong>.ie, .eu and .me</strong> have no public RDAP service.</li>
     </ul>
+
+    <h2>What can I see about a taken name?</h2>
+    <p>Tap a taken domain for what its registry's record says: when it was registered, when it expires, the registrar it was registered through, and its name servers. The app already has the record from checking the domain, so nothing more is asked. There's also a link to visit the site, in a new tab.</p>
+    <p>The app adds a note when the record suggests the name could still be had:</p>
+    <ul>
+      <li><strong>Probably for sale</strong>: its name servers are with a well-known domain marketplace (Atom, Sedo, Afternic, Dan.com, HugeDomains or Undeveloped).</li>
+      <li><strong>Parked</strong>: its name servers are with a parking service (Bodis, ParkingCrew or Above.com), so the owner may be willing to sell.</li>
+      <li><strong>Expiring</strong>: it expires within 60 days. If it isn't renewed, it may become free some weeks later.</li>
+      <li><strong>Being deleted</strong>: the registry has it pending deletion, so it may become free soon.</li>
+    </ul>
+    <p>These are hints from the record, not offers: check with the marketplace or a registrar. The app doesn't show a preview of the site itself, because many sites don't allow being shown inside another page, and a screenshot service would see every name you look at.</p>
 
     <h2>Does "free" mean I can register it?</h2>
     <p>Not always. Free means nobody had registered the domain when the app asked. Registries hold some names back, sell others at premium prices (common with .ai and short names), and someone else can register a name at any moment. Check with a registrar before you rely on a name.</p>

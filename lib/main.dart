@@ -1,6 +1,7 @@
 import 'package:english_words/english_words.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/link.dart';
 
 import 'brand.dart';
 import 'domains.dart';
@@ -332,7 +333,8 @@ class _RandomWordsState extends State<RandomWords> {
 
   /// Whether `name` is free under [tld]: in a sentence, or [brief]ly as the
   /// ending alone, with the sentence as its tooltip. One that couldn't be
-  /// checked is asked again when tapped.
+  /// checked is asked again when tapped; a taken one shows what its registry
+  /// says about it.
   Widget _domain(String name, Tld tld, {required bool brief}) {
     final domain = '$name.${tld.name}';
     final status = widget.checker.statusOf(name, tld);
@@ -343,20 +345,37 @@ class _RandomWordsState extends State<RandomWords> {
         ('Checking $domain… (more slowly for now)', colours.outline, Icons.hourglass_empty),
       Availability.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
       Availability.free => ('$domain is free', green, Icons.check_circle),
-      Availability.taken => ('$domain is taken', colours.outline, Icons.block),
+      Availability.taken => ('$domain is taken: tap for details', colours.outline, Icons.block),
       Availability.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
     };
+    final taken = status == Availability.taken;
     final row = Row(
-      mainAxisSize: brief ? MainAxisSize.min : MainAxisSize.max,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: brief ? 15 : 16, color: colour),
         SizedBox(width: brief ? 3 : 6),
-        if (brief) Text('$tld', style: TextStyle(color: colour)) else Flexible(child: Text(sentence, style: TextStyle(color: colour))),
+        if (brief)
+          Text('$tld', style: TextStyle(color: colour))
+        else
+          Flexible(child: Text(taken ? '$domain is taken' : sentence, style: TextStyle(color: colour))),
+        if (taken && !brief) ...[const SizedBox(width: 4), Icon(Icons.info_outline, size: 15, color: colours.primary)],
       ],
     );
     return GestureDetector(
-      onTap: status == Availability.unknown ? () => widget.checker.retry(name, tld) : null,
+      onTap: switch (status) {
+        Availability.unknown => () => widget.checker.retry(name, tld),
+        Availability.taken => () => _showRecord(name, tld),
+        _ => null,
+      },
       child: brief ? Tooltip(message: sentence, child: Semantics(label: sentence, excludeSemantics: true, child: row)) : row,
+    );
+  }
+
+  void _showRecord(String name, Tld tld) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _RecordSheet(domain: '$name.${tld.name}', record: widget.checker.recordOf(name, tld)),
     );
   }
 }
@@ -466,6 +485,102 @@ class _TroubleNotice extends StatelessWidget {
 }
 
 String _capital(String word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1);
+
+/// What a taken domain's registry says about it, and a link to its site.
+class _RecordSheet extends StatelessWidget {
+  const _RecordSheet({required this.domain, this.record});
+
+  final String domain;
+  final DomainRecord? record;
+
+  static const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
+      'October', 'November', 'December'];
+
+  static String _date(DateTime date) => '${date.day} ${_months[date.month - 1]} ${date.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colours = theme.colorScheme;
+    final record = this.record;
+    final now = DateTime.now();
+    final daysLeft = record?.expires?.difference(now).inDays;
+    final market = record?.market;
+    final notes = [
+      if (record != null && record.beingDeleted)
+        'The registry is deleting it, so it may become free soon.'
+      else if (daysLeft != null && daysLeft >= 0 && daysLeft <= 60)
+        "It expires in $daysLeft ${daysLeft == 1 ? 'day' : 'days'}. If the owner doesn't renew it, it may become free some weeks after that.",
+      if (market != null && market.marketplace)
+        'Its name servers are with ${market.name}, a domain marketplace, so it is probably for sale there.',
+      if (market != null && !market.marketplace)
+        'It is parked with ${market.name}, a parking service: the owner may be willing to sell it.',
+    ];
+    Widget line(String label, String value) => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 110, child: Text(label, style: TextStyle(color: colours.onSurfaceVariant))),
+              Expanded(child: SelectableText(value)),
+            ],
+          ),
+        );
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(domain, style: theme.textTheme.headlineSmall),
+            const SizedBox(height: 4),
+            Text('Taken', style: TextStyle(color: colours.onSurfaceVariant, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 16),
+            if (record == null)
+              Text("The registry didn't say more about it.", style: TextStyle(color: colours.onSurfaceVariant))
+            else ...[
+              if (record.registered case final registered?) line('Registered', _date(registered)),
+              if (record.expires case final expires?) line('Expires', _date(expires)),
+              if (record.registrar case final registrar?) line('Registrar', registrar),
+              if (record.nameservers.isNotEmpty) line('Name servers', record.nameservers.join(', ')),
+            ],
+            for (final note in notes)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Material(
+                  color: colours.secondaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(note, style: TextStyle(color: colours.onSecondaryContainer)),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                // In a tab of its own, so the list stays as it is.
+                Link(
+                  uri: Uri.https(domain),
+                  target: LinkTarget.blank,
+                  builder: (context, open) => FilledButton.icon(
+                    onPressed: open,
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: Text('Visit $domain'),
+                  ),
+                ),
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 /// Picks the domain endings to check, at least one: answers them in the order
 /// of [tlds], or nothing if cancelled.

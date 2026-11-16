@@ -1,132 +1,244 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:english_words/english_words.dart';
+import 'package:http/http.dart' as http;
+import 'package:material_ui/material_ui.dart';
 
-void main() => runApp(MyApp());
+import 'names.dart';
 
-class MyApp extends StatelessWidget {
+void main() => runApp(NamerApp(checker: DotComChecker()));
+
+class NamerApp extends StatelessWidget {
+  const NamerApp({super.key, required this.checker});
+
+  final DotComChecker checker;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Startup Name Generator',
-      theme: ThemeData(
-        // Add the 3 lines from here...
-        primaryColor: Colors.white,
-      ), // ... to here.
-      home: RandomWords(),
+      theme: ThemeData(colorSchemeSeed: Colors.indigo),
+      home: RandomWords(checker: checker),
     );
+  }
+}
+
+/// What the .com registry says about a name's .com.
+enum DotCom { checking, free, taken, unknown }
+
+/// Asks the .com registry (Verisign's public RDAP service, which any web page may
+/// ask) whether each name's .com is registered: it answers 404 for one nobody has.
+/// A few at a time, a moment apart, and each name once.
+class DotComChecker extends ChangeNotifier {
+  DotComChecker({http.Client? client}) : _client = client ?? http.Client();
+
+  final http.Client _client;
+  final Map<String, DotCom> _found = {};
+  final Queue<String> _waiting = Queue();
+  int _running = 0;
+  static const _atOnce = 2;
+  static const _gap = Duration(milliseconds: 150);
+
+  /// The answer so far for `name` (letters only, like "neatchip"), asking if it's new.
+  DotCom statusOf(String name) {
+    final known = _found[name];
+    if (known != null) return known;
+    _found[name] = DotCom.checking;
+    _waiting.add(name);
+    _next();
+    return DotCom.checking;
+  }
+
+  void _next() {
+    while (_running < _atOnce && _waiting.isNotEmpty) {
+      final name = _waiting.removeFirst();
+      _running++;
+      _check(name).whenComplete(() async {
+        await Future<void>.delayed(_gap);
+        _running--;
+        _next();
+      });
+    }
+  }
+
+  Future<void> _check(String name) async {
+    DotCom answer;
+    try {
+      final response = await _client
+          .get(Uri.https('rdap.verisign.com', '/com/v1/domain/$name.com'))
+          .timeout(const Duration(seconds: 10));
+      answer = switch (response.statusCode) {
+        404 => DotCom.free,
+        200 => DotCom.taken,
+        _ => DotCom.unknown,
+      };
+    } catch (_) {
+      answer = DotCom.unknown;
+    }
+    _found[name] = answer;
+    notifyListeners();
+  }
+
+  /// Asks again about a name that couldn't be checked.
+  void retry(String name) {
+    if (_found[name] != DotCom.unknown) return;
+    _found.remove(name);
+    statusOf(name);
+    notifyListeners();
   }
 }
 
 class RandomWords extends StatefulWidget {
+  const RandomWords({super.key, required this.checker});
+
+  final DotComChecker checker;
+
   @override
-  RandomWordsState createState() => RandomWordsState();
+  State<RandomWords> createState() => _RandomWordsState();
 }
 
-class RandomWordsState extends State<RandomWords> {
-  @override // Add from this line ...
-  final List<WordPair> _suggestions = <WordPair>[];
-  final Set<WordPair> _saved = Set<WordPair>(); // Add this line.
-  final TextStyle _biggerFont = const TextStyle(fontSize: 18);
+class _RandomWordsState extends State<RandomWords> {
+  final _suggestions = <WordPair>[];
+  final _saved = <WordPair>{};
+  final _biggerFont = const TextStyle(fontSize: 18);
+  final _scroll = ScrollController();
+  bool _tech = false;
+  bool _longer = false;
+  late Iterator<WordPair> _pairs = _newPairs();
+
+  Iterator<WordPair> _newPairs() => namePairs(longer: _longer, tech: _tech).iterator;
+
+  /// A fresh list from the top with the words chosen. Saved names stay.
+  void _setWords({bool? tech, bool? longer}) {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    setState(() {
+      _tech = tech ?? _tech;
+      _longer = longer ?? _longer;
+      _pairs = _newPairs();
+      _suggestions.clear();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
   void _pushSaved() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        // Add 20 lines from here...
-        builder: (BuildContext context) {
-          final Iterable<ListTile> tiles = _saved.map(
-            (WordPair pair) {
-              return ListTile(
-                title: Text(
-                  pair.asPascalCase,
-                  style: _biggerFont,
-                ),
-              );
-            },
-          );
-          final List<Widget> divided = ListTile.divideTiles(
-            context: context,
-            tiles: tiles,
-          ).toList();
-          return Scaffold(
-            // Add 6 lines from here...
-            appBar: AppBar(
-              title: Text('Saved Suggestions'),
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Saved Suggestions')),
+          body: ListenableBuilder(
+            listenable: widget.checker,
+            builder: (context, _) => ListView(
+              children: ListTile.divideTiles(
+                context: context,
+                tiles: _saved.map((pair) => _tile(pair)),
+              ).toList(),
             ),
-            body: ListView(children: divided),
-          ); // ... to here.
-        },
+          ),
+        ),
       ),
     );
   }
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Add from here...
       appBar: AppBar(
-        title: Text('Startup Name Generator'),
-        actions: <Widget>[
-          // Add 3 lines from here...
-          IconButton(icon: Icon(Icons.list), onPressed: _pushSaved),
+        title: const Text('Startup Name Generator'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.list),
+            onPressed: _pushSaved,
+            tooltip: 'Saved Suggestions',
+          ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(52),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Wrap(
+              spacing: 8,
+              children: [
+                FilterChip(
+                  label: const Text('Tech words'),
+                  tooltip: 'One word of each name is a tech word, like quark or pixel',
+                  selected: _tech,
+                  onSelected: (on) => _setWords(tech: on),
+                ),
+                FilterChip(
+                  label: const Text('Longer words'),
+                  tooltip: 'Two-syllable words too, like river or signal',
+                  selected: _longer,
+                  onSelected: (on) => _setWords(longer: on),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: _buildSuggestions(),
-    ); // ... to here.
-  } // ... to this line.
-
-  Widget _buildSuggestions() {
-    return ListView.builder(
-        padding: const EdgeInsets.all(16),
-        // The itemBuilder callback is called once per suggested
-        // word pairing, and places each suggestion into a ListTile
-        // row. For even rows, the function adds a ListTile row for
-        // the word pairing. For odd rows, the function adds a
-        // Divider widget to visually separate the entries. Note that
-        // the divider may be difficult to see on smaller devices.
-        itemBuilder: (BuildContext _context, int i) {
-          // Add a one-pixel-high divider widget before each row
-          // in the ListView.
-          if (i.isOdd) {
-            return Divider();
-          }
-
-          // The syntax "i ~/ 2" divides i by 2 and returns an
-          // integer result.
-          // For example: 1, 2, 3, 4, 5 becomes 0, 1, 1, 2, 2.
-          // This calculates the actual number of word pairings
-          // in the ListView,minus the divider widgets.
-          final int index = i ~/ 2;
-          // If you've reached the end of the available word
-          // pairings...
-          if (index >= _suggestions.length) {
-            // ...then generate 10 more and add them to the
-            // suggestions list.
-            _suggestions.addAll(generateWordPairs().take(10));
-          }
-          return _buildRow(_suggestions[index]);
-        });
+      body: ListenableBuilder(
+        listenable: widget.checker,
+        builder: (context, _) => ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.all(16),
+          itemBuilder: (context, i) {
+            if (i.isOdd) return const Divider();
+            final index = i ~/ 2;
+            while (index >= _suggestions.length && _pairs.moveNext()) {
+              _suggestions.add(_pairs.current);
+            }
+            return _buildRow(_suggestions[index]);
+          },
+        ),
+      ),
+    );
   }
 
   Widget _buildRow(WordPair pair) {
-    final bool alreadySaved = _saved.contains(pair); // Add this line.
-    return ListTile(
-      title: Text(
-        pair.asPascalCase,
-        style: _biggerFont,
-      ),
+    final alreadySaved = _saved.contains(pair);
+    return _tile(
+      pair,
       trailing: Icon(
-        // Add the lines from here...
         alreadySaved ? Icons.favorite : Icons.favorite_border,
         color: alreadySaved ? Colors.red : null,
+        semanticLabel: alreadySaved ? 'Remove from saved' : 'Save',
       ),
-      onTap: () {
-        // Add 9 lines from here...
-        setState(() {
-          if (alreadySaved) {
-            _saved.remove(pair);
-          } else {
-            _saved.add(pair);
-          }
-        });
-      }, // ... to here.
+      onTap: () => setState(() {
+        if (!_saved.remove(pair)) _saved.add(pair);
+      }),
+    );
+  }
+
+  /// A name, with whether its .com is free under it.
+  ListTile _tile(WordPair pair, {Widget? trailing, VoidCallback? onTap}) {
+    final domain = '${pair.asLowerCase}.com';
+    final status = widget.checker.statusOf(pair.asLowerCase);
+    final colours = Theme.of(context).colorScheme;
+    final (text, colour, icon) = switch (status) {
+      DotCom.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
+      DotCom.free => ('$domain is free', Colors.green.shade700, Icons.check_circle),
+      DotCom.taken => ('$domain is taken', colours.outline, Icons.block),
+      DotCom.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
+    };
+    return ListTile(
+      title: Text(pair.asPascalCase, style: _biggerFont),
+      subtitle: GestureDetector(
+        onTap: status == DotCom.unknown ? () => widget.checker.retry(pair.asLowerCase) : null,
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: colour),
+            const SizedBox(width: 6),
+            Flexible(child: Text(text, style: TextStyle(color: colour))),
+          ],
+        ),
+      ),
+      trailing: trailing,
+      onTap: onTap,
     );
   }
 }

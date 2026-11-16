@@ -1,5 +1,5 @@
 name: startup_namer
-description: A new Flutter application.
+description: Startup name ideas, with whether each name's .com is free.
 
 # The following line prevents the package from being accidentally published to
 # pub.dev using `pub publish`. This is preferred for private packages.
@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.7.0 <3.0.0"
+  sdk: ^3.5.0
 
 dependencies:
   flutter:
@@ -28,10 +28,13 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-  english_words: ^3.1.0   # add this line
+  english_words: ^4.0.0
+  http: ^1.6.0
+  material_ui: ^1.11.0
 
 
 dev_dependencies:
+  flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
 

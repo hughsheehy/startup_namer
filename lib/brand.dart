@@ -17,9 +17,10 @@ abstract final class Brand {
   /// Where "Built by LoudVector" goes.
   static final home = Uri.parse('https://loudvector.com');
 
-  /// The questions and answers page (web/faq.html). Cloudflare serves it at
-  /// /faq, and redirects faq.html there.
-  static final faq = Uri.parse('faq');
+  /// The questions and answers page (web/faq.html), which Cloudflare serves at
+  /// /faq. A full address, from the page's own: given just "faq", Link takes it
+  /// for a screen inside the app and makes it /#faq.
+  static Uri get faq => Uri.base.resolve('/faq');
 
   static ThemeData theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;

@@ -362,7 +362,9 @@ void main() {
     final client = MockClient((request) async => http.Response('', 404));
     await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
     final faq = tester.widget<Link>(find.ancestor(of: find.text('FAQ'), matching: find.byType(Link)));
-    expect(faq.uri.toString(), 'faq');
+    // A full address: a bare "faq" would be taken for a screen inside the app (/#faq).
+    expect(faq.uri!.hasScheme, isTrue);
+    expect(faq.uri!.path, '/faq');
     expect(faq.target, LinkTarget.blank);
     await tester.pump(const Duration(seconds: 30));
   });

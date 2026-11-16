@@ -52,7 +52,7 @@ void main() {
     });
     await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.textContaining('registry is busy'), findsWidgets);
+    expect(find.textContaining('more slowly for now'), findsWidgets);
     expect(find.textContaining("Couldn't check"), findsNothing); // Not given up on...
     final soFar = asked;
     await tester.pump(const Duration(seconds: 1));
@@ -61,7 +61,79 @@ void main() {
     busy = false;
     await tester.pump(const Duration(minutes: 2));
     expect(find.textContaining('is free'), findsWidgets);
-    expect(find.textContaining('registry is busy'), findsNothing);
+    expect(find.textContaining('more slowly for now'), findsNothing);
+  });
+
+  testWidgets('a notice says when the registry is slow, then not answering, and goes when it answers', (tester) async {
+    var hang = true;
+    final client = MockClient((request) async {
+      if (hang) await Future<void>.delayed(const Duration(seconds: 30));
+      return http.Response('', 404);
+    });
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('The .com check is slow'), findsNothing); // Not yet...
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('The .com check is slow'), findsOneWidget); // ...but soon.
+
+    await tester.pump(const Duration(seconds: 7));
+    expect(find.text("The .com check isn't getting answers"), findsOneWidget);
+    expect(find.textContaining('getting no reply from the registry (rdap.verisign.com) within 10 seconds'), findsOneWidget);
+    expect(find.textContaining('checks in a row have had trouble so far'), findsOneWidget);
+
+    hang = false;
+    await tester.tap(find.text('Check again'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.textContaining('is free'), findsWidgets);
+    expect(find.text("The .com check isn't getting answers"), findsNothing);
+    await tester.pump(const Duration(minutes: 2));
+  });
+
+  testWidgets('a notice says when the registry can\'t be reached', (tester) async {
+    var fail = true;
+    final client = MockClient((request) async {
+      if (fail) throw Exception('offline');
+      return http.Response('', 404);
+    });
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text("The .com check can't reach the registry"), findsOneWidget);
+
+    fail = false;
+    await tester.tap(find.text('Check again'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text("The .com check can't reach the registry"), findsNothing);
+    await tester.pump(const Duration(minutes: 2));
+  });
+
+  testWidgets('one failed check alone brings no notice', (tester) async {
+    var failures = 1;
+    final client = MockClient((request) async {
+      if (failures-- > 0) throw Exception('blip');
+      return http.Response('', 404);
+    });
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('The .com check'), findsNothing);
+    }
+    await tester.pump(const Duration(minutes: 2));
+  });
+
+  testWidgets('notices say when the registry limits checks, or answers with errors', (tester) async {
+    var status = 429;
+    final client = MockClient((request) async => http.Response('', status));
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('The registry is limiting checks'), findsOneWidget);
+    expect(find.textContaining('"too many requests"'), findsOneWidget);
+
+    status = 500;
+    await tester.pump(const Duration(minutes: 2));
+    expect(find.text('The registry is answering with errors'), findsOneWidget);
+    expect(find.textContaining('answering with error 500'), findsOneWidget);
+    await tester.pump(const Duration(minutes: 2));
   });
 
   testWidgets('a starting letter makes every name start with it', (tester) async {

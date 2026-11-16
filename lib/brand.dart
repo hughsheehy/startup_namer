@@ -14,6 +14,9 @@ abstract final class Brand {
   /// Where "If you like it, buy me chocolate." goes.
   static final chocolate = Uri.parse('https://ko-fi.com/loudvector');
 
+  /// Where "Built by LoudVector" goes.
+  static final home = Uri.parse('https://loudvector.com');
+
   static ThemeData theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     final colours = ColorScheme.fromSeed(
@@ -81,83 +84,73 @@ class _BracketPainter extends CustomPainter {
 Path _polygon(List<(double, double)> points) => Path()
   ..addPolygon([for (final (x, y) in points) Offset(x, y)], true);
 
-/// The strip along the bottom: a link to buy chocolate, and below it "Built by
-/// LoudVector" with the logo.
+/// The strip along the bottom, as in the transport apps: a pill-shaped link to buy
+/// chocolate, and below it "Built by LoudVector" with the logo, linking to
+/// loudvector.com.
 class BrandFooter extends StatelessWidget {
   const BrandFooter({super.key});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colours = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final builtBy = Semantics(
-      label: 'Built by LoudVector',
-      excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('Built by', style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(width: 10),
-          SvgPicture.asset('assets/logo/icon-small.svg', width: 22, height: 22),
-          const SizedBox(width: 8),
-          SvgPicture.asset('assets/logo/lockup-${dark ? 'dark' : 'light'}.svg', height: 18),
-        ],
-      ),
-    );
     final chocolate = Link(
       uri: Brand.chocolate,
       target: LinkTarget.blank,
-      builder: (context, open) => TextButton.icon(
+      builder: (context, open) => OutlinedButton(
         onPressed: open,
-        icon: const _ChocolateBar(),
-        label: const Text('If you like it, buy me chocolate.'),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: const StadiumBorder(),
+          side: BorderSide(color: colours.outlineVariant),
+          backgroundColor: colours.surface,
+          foregroundColor: colours.onSurface,
+          // The theme's own button text (Outfit), not a bare style that drops the font.
+          textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        child: const Text('🍫 If you like it, buy me chocolate.'),
+      ),
+    );
+    final builtBy = Link(
+      uri: Brand.home,
+      target: LinkTarget.blank,
+      builder: (context, open) => TextButton(
+        onPressed: open,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          foregroundColor: colours.onSurfaceVariant,
+        ),
+        child: Semantics(
+          label: 'Built by LoudVector',
+          excludeSemantics: true,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Built by', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: colours.onSurfaceVariant)),
+              const SizedBox(width: 10),
+              SvgPicture.asset('assets/logo/icon-small.svg', width: 22, height: 22),
+              const SizedBox(width: 8),
+              SvgPicture.asset('assets/logo/lockup-${dark ? 'dark' : 'light'}.svg', height: 18),
+            ],
+          ),
+        ),
       ),
     );
     return Material(
-      color: theme.colorScheme.surfaceContainerLow,
+      color: colours.surfaceContainerLow,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [chocolate, builtBy]),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [chocolate, const SizedBox(height: 14), builtBy],
+          ),
         ),
       ),
     );
   }
-}
-
-/// A little bar of chocolate, two squares by three.
-class _ChocolateBar extends StatelessWidget {
-  const _ChocolateBar();
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return CustomPaint(
-      size: const Size(14, 18),
-      painter: _ChocolatePainter(dark ? const Color(0xFFC08A63) : const Color(0xFF7B4A2E)),
-    );
-  }
-}
-
-class _ChocolatePainter extends CustomPainter {
-  const _ChocolatePainter(this.colour);
-
-  final Color colour;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = colour;
-    for (var row = 0; row < 3; row++) {
-      for (var column = 0; column < 2; column++) {
-        canvas.drawRRect(
-          RRect.fromLTRBR(1 + column * 6.5, row * 6.2, 6.5 + column * 6.5, 5.2 + row * 6.2, const Radius.circular(1.2)),
-          paint,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ChocolatePainter oldDelegate) => oldDelegate.colour != colour;
 }

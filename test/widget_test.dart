@@ -224,14 +224,19 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('the footer says Built by LoudVector, with the logo, and links to buying chocolate', (tester) async {
+  testWidgets('the footer links to buying chocolate, and Built by LoudVector links to loudvector.com', (tester) async {
     final client = MockClient((request) async => http.Response('', 404));
     await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
     expect(find.text('Built by'), findsOneWidget);
     expect(find.bySemanticsLabel('Built by LoudVector'), findsOneWidget);
     expect(find.byType(SvgPicture), findsNWidgets(2)); // The icon and the |LoudVector> lockup.
-    expect(find.text('If you like it, buy me chocolate.'), findsOneWidget);
-    final link = tester.widget<Link>(find.ancestor(of: find.text('If you like it, buy me chocolate.'), matching: find.byType(Link)));
+    final builtBy = tester.widget<Link>(find.ancestor(of: find.text('Built by'), matching: find.byType(Link)));
+    expect(builtBy.uri.toString(), 'https://loudvector.com');
+    expect(builtBy.target, LinkTarget.blank);
+    const chocolate = '🍫 If you like it, buy me chocolate.';
+    expect(find.text(chocolate), findsOneWidget);
+    expect(find.ancestor(of: find.text(chocolate), matching: find.byType(OutlinedButton)), findsOneWidget);
+    final link = tester.widget<Link>(find.ancestor(of: find.text(chocolate), matching: find.byType(Link)));
     expect(link.uri.toString(), 'https://ko-fi.com/loudvector');
     expect(link.target, LinkTarget.blank);
     await tester.pump(const Duration(seconds: 30));

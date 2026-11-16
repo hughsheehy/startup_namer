@@ -230,9 +230,9 @@ void main() {
     expect(find.text('Built by'), findsOneWidget);
     expect(find.bySemanticsLabel('Built by LoudVector'), findsOneWidget);
     expect(find.byType(SvgPicture), findsNWidgets(2)); // The icon and the |LoudVector> lockup.
-    expect(find.text('Buy me chocolate'), findsOneWidget);
-    final link = tester.widget<Link>(find.ancestor(of: find.text('Buy me chocolate'), matching: find.byType(Link)));
-    expect(link.uri.toString(), 'https://ko-fi.com/irishfolklore');
+    expect(find.text('If you like it, buy me chocolate.'), findsOneWidget);
+    final link = tester.widget<Link>(find.ancestor(of: find.text('If you like it, buy me chocolate.'), matching: find.byType(Link)));
+    expect(link.uri.toString(), 'https://ko-fi.com/loudvector');
     expect(link.target, LinkTarget.blank);
     await tester.pump(const Duration(seconds: 30));
   });

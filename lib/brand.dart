@@ -11,8 +11,8 @@ abstract final class Brand {
   static const ink = Color(0xFF16132E);
   static const inkOnDark = Color(0xFFF3F2FA);
 
-  /// Where "Buy me chocolate" goes.
-  static final chocolate = Uri.parse('https://ko-fi.com/irishfolklore');
+  /// Where "If you like it, buy me chocolate." goes.
+  static final chocolate = Uri.parse('https://ko-fi.com/loudvector');
 
   static ThemeData theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
@@ -106,7 +106,7 @@ class BrandFooter extends StatelessWidget {
       builder: (context, open) => TextButton.icon(
         onPressed: open,
         icon: const _ChocolateBar(),
-        label: const Text('Buy me chocolate'),
+        label: const Text('If you like it, buy me chocolate.'),
       ),
     );
     return Material(

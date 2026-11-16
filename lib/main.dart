@@ -79,6 +79,7 @@ class _RandomWordsState extends State<RandomWords> {
   final _scroll = ScrollController();
   bool _tech = false;
   bool _longer = false;
+  bool _more = false;
   WordOrder _order = WordOrder.mixed;
   String _letter = ''; // Every name starts with this, if set.
   String _word = ''; // Every name has this word, if set...
@@ -88,6 +89,7 @@ class _RandomWordsState extends State<RandomWords> {
 
   Iterator<WordPair> _newPairs() => namePairs(
         longer: _longer,
+        more: _more,
         tech: _tech,
         order: _order,
         letter: _letter,
@@ -96,12 +98,13 @@ class _RandomWordsState extends State<RandomWords> {
       ).iterator;
 
   /// A fresh list from the top with the options chosen. Saved names stay.
-  void _setWords({bool? tech, bool? longer, WordOrder? order, String? letter, String? word, Place? place}) {
+  void _setWords({bool? tech, bool? longer, bool? more, WordOrder? order, String? letter, String? word, Place? place}) {
     if (_scroll.hasClients) _scroll.jumpTo(0);
     widget.checker.dropWaiting();
     setState(() {
       _tech = tech ?? _tech;
       _longer = longer ?? _longer;
+      _more = more ?? _more;
       _order = order ?? _order;
       _letter = letter ?? _letter;
       _word = word ?? _word;
@@ -176,93 +179,99 @@ class _RandomWordsState extends State<RandomWords> {
           ),
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                FilterChip(
-                  label: const Text('Tech words'),
-                  tooltip: 'One word of each name is a tech word, like quark or pixel',
-                  selected: _tech,
-                  onSelected: (on) => _setWords(tech: on),
-                ),
-                FilterChip(
-                  label: const Text('Longer words'),
-                  tooltip: 'Two-syllable words too, like river or signal',
-                  selected: _longer,
-                  onSelected: (on) => _setWords(longer: on),
-                ),
-                MenuAnchor(
-                  menuChildren: [
-                    for (final order in WordOrder.values)
-                      MenuItemButton(
-                        leadingIcon: Icon(order == _order ? Icons.radio_button_checked : Icons.radio_button_unchecked),
-                        onPressed: () => _setWords(order: order),
-                        child: Text('${order.label}: ${order.example}'),
+      // The options and any notice scroll away with the names, so the names get
+      // the room on a small screen.
+      body: ListenableBuilder(
+        listenable: widget.checker,
+        builder: (context, _) => CustomScrollView(
+          controller: _scroll,
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    FilterChip(
+                      label: const Text('Tech words'),
+                      tooltip: 'One word of each name is a tech word, like quark or pixel',
+                      selected: _tech,
+                      onSelected: (on) => _setWords(tech: on),
+                    ),
+                    FilterChip(
+                      label: const Text('Longer words'),
+                      tooltip: 'Two-syllable words too, like river or signal',
+                      selected: _longer,
+                      onSelected: (on) => _setWords(longer: on),
+                    ),
+                    FilterChip(
+                      label: const Text('More words'),
+                      tooltip: 'Over twice as many words, some less common, like tundra or velocity',
+                      selected: _more,
+                      onSelected: (on) => _setWords(more: on),
+                    ),
+                    MenuAnchor(
+                      menuChildren: [
+                        for (final order in WordOrder.values)
+                          MenuItemButton(
+                            leadingIcon: Icon(order == _order ? Icons.radio_button_checked : Icons.radio_button_unchecked),
+                            onPressed: () => _setWords(order: order),
+                            child: Text('${order.label}: ${order.example}'),
+                          ),
+                      ],
+                      builder: (context, menu, _) => FilterChip(
+                        avatar: const Icon(Icons.swap_horiz),
+                        showCheckmark: false,
+                        label: Text(_order.label),
+                        tooltip: 'Which kind of word goes first',
+                        selected: _order != WordOrder.mixed,
+                        onSelected: (_) => menu.isOpen ? menu.close() : menu.open(),
                       ),
+                    ),
+                    FilterChip(
+                      avatar: const Icon(Icons.sort_by_alpha),
+                      showCheckmark: false,
+                      label: Text(_letter.isEmpty ? 'Starting letter' : 'Starts with ${_letter.toUpperCase()}'),
+                      tooltip: 'Names that start with a letter of your choice',
+                      selected: _letter.isNotEmpty,
+                      onSelected: (_) => _pickLetter(),
+                      onDeleted: _letter.isEmpty ? null : () => _setWords(letter: ''),
+                      deleteButtonTooltipMessage: 'Any letter',
+                    ),
+                    FilterChip(
+                      avatar: const Icon(Icons.edit),
+                      showCheckmark: false,
+                      label: Text(switch ((_word, _place)) {
+                        ('', _) => 'Your own word',
+                        (final word, Place.first) => '${_capital(word)} first',
+                        (final word, Place.second) => '${_capital(word)} second',
+                        (final word, Place.either) => 'With ${_capital(word)}',
+                      }),
+                      tooltip: 'A word of your own in every name',
+                      selected: _word.isNotEmpty,
+                      onSelected: (_) => _pickWord(),
+                      onDeleted: _word.isEmpty ? null : () => _setWords(word: ''),
+                      deleteButtonTooltipMessage: 'No word of my own',
+                    ),
+                    FilterChip(
+                      avatar: const Icon(Icons.public),
+                      showCheckmark: false,
+                      label: Text('${_tlds.first}${_tlds.length > 1 ? ' +${_tlds.length - 1}' : ''}'),
+                      tooltip: 'Which domain endings to check, like .com or .ai',
+                      selected: !(_tlds.length == 1 && _tlds.single.name == 'com'),
+                      onSelected: (_) => _pickTlds(),
+                    ),
                   ],
-                  builder: (context, menu, _) => FilterChip(
-                    avatar: const Icon(Icons.swap_horiz),
-                    showCheckmark: false,
-                    label: Text(_order.label),
-                    tooltip: 'Which kind of word goes first',
-                    selected: _order != WordOrder.mixed,
-                    onSelected: (_) => menu.isOpen ? menu.close() : menu.open(),
-                  ),
                 ),
-                FilterChip(
-                  avatar: const Icon(Icons.sort_by_alpha),
-                  showCheckmark: false,
-                  label: Text(_letter.isEmpty ? 'Starting letter' : 'Starts with ${_letter.toUpperCase()}'),
-                  tooltip: 'Names that start with a letter of your choice',
-                  selected: _letter.isNotEmpty,
-                  onSelected: (_) => _pickLetter(),
-                  onDeleted: _letter.isEmpty ? null : () => _setWords(letter: ''),
-                  deleteButtonTooltipMessage: 'Any letter',
-                ),
-                FilterChip(
-                  avatar: const Icon(Icons.edit),
-                  showCheckmark: false,
-                  label: Text(switch ((_word, _place)) {
-                    ('', _) => 'Your own word',
-                    (final word, Place.first) => '${_capital(word)} first',
-                    (final word, Place.second) => '${_capital(word)} second',
-                    (final word, Place.either) => 'With ${_capital(word)}',
-                  }),
-                  tooltip: 'A word of your own in every name',
-                  selected: _word.isNotEmpty,
-                  onSelected: (_) => _pickWord(),
-                  onDeleted: _word.isEmpty ? null : () => _setWords(word: ''),
-                  deleteButtonTooltipMessage: 'No word of my own',
-                ),
-                FilterChip(
-                  avatar: const Icon(Icons.public),
-                  showCheckmark: false,
-                  label: Text('${_tlds.first}${_tlds.length > 1 ? ' +${_tlds.length - 1}' : ''}'),
-                  tooltip: 'Which domain endings to check, like .com or .ai',
-                  selected: !(_tlds.length == 1 && _tlds.single.name == 'com'),
-                  onSelected: (_) => _pickTlds(),
-                ),
-              ],
+              ),
             ),
-          ),
-          ListenableBuilder(
-            listenable: widget.checker,
-            builder: (context, _) => _TroubleNotice(checker: widget.checker),
-          ),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: widget.checker,
-              builder: (context, _) => ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.all(16),
-                itemBuilder: (context, i) {
+            SliverToBoxAdapter(child: _TroubleNotice(checker: widget.checker)),
+            SliverPadding(
+              padding: const EdgeInsets.all(16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, i) {
                   final index = i ~/ 2;
                   while (index >= _suggestions.length && _pairs.moveNext()) {
                     _suggestions.add(_pairs.current);
@@ -282,11 +291,11 @@ class _RandomWordsState extends State<RandomWords> {
                           leading: Icon(Icons.done_all),
                           title: Text("That's every name these options make"),
                         );
-                },
+                }),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: const BrandFooter(),
     );

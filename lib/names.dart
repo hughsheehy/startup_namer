@@ -6,6 +6,7 @@ import 'package:english_words/english_words.dart';
 // ignore: implementation_imports
 import 'package:english_words/src/words/unsafe.dart';
 
+import 'more_words.dart';
 import 'tech_words.dart';
 
 /// Which kind of word goes first and which second, with a word of each kind for
@@ -47,7 +48,9 @@ typedef _Way = ({List<List<String>> first, List<List<String>> second, bool plain
 /// Names made as the original codelab did, from the most used English words.
 ///
 /// By default, an adjective or noun then a noun, two syllables in all; [order]
-/// picks the kinds of word instead. [longer] lets in two-syllable words (river,
+/// picks the kinds of word instead. [more] adds 2,000 more adjectives and 4,700
+/// more nouns, less common ones too (tundra, velocity, celestial), from
+/// [extraAdjectives] and [extraNouns]. [longer] lets in two-syllable words (river,
 /// signal), for up to three syllables. [tech] makes one of the two words one of
 /// [techWords]. [letter] is the letter every name starts with, and [word] a word
 /// of the user's own that's in every name, in the [place] asked for; with [tech]
@@ -59,6 +62,7 @@ typedef _Way = ({List<List<String>> first, List<List<String>> second, bool plain
 /// (Christian, French, God, Mrs).
 Iterable<WordPair> namePairs({
   bool longer = false,
+  bool more = false,
   bool tech = false,
   WordOrder order = WordOrder.mixed,
   String letter = '',
@@ -82,8 +86,8 @@ Iterable<WordPair> namePairs({
   List<List<String>> only(List<List<String>> lists, bool first) =>
       [for (final list in lists) first ? _startingWith(list, letter) : list].where((l) => l.isNotEmpty).toList();
   List<List<String>> plain(_Kind kind, {bool first = false}) => only([
-        if (kind != _Kind.noun) _words(adjectives, maxPerWord),
-        if (kind != _Kind.adjective) _words(nouns, maxPerWord),
+        if (kind != _Kind.noun) _words(more ? _allAdjectives : adjectives, maxPerWord),
+        if (kind != _Kind.adjective) _words(more ? _allNouns : nouns, maxPerWord),
       ], first);
   List<List<String>> techy(_Kind kind, {bool first = false}) => only([
         switch (kind) {
@@ -136,6 +140,10 @@ final _unsafePairs = unsafePairs.toSet();
 final _wordLists = <(List<String>, int), List<String>>{};
 
 /// The lower-case, safe words of `list` of up to `maxSyllables`, worked out once.
+/// The words with "More words" on: english_words' and the extra ones.
+final _allAdjectives = [...adjectives, ...extraAdjectives];
+final _allNouns = [...nouns, ...extraNouns];
+
 List<String> _words(List<String> list, int maxSyllables) => _wordLists.putIfAbsent(
       (list, maxSyllables),
       () => [

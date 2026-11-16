@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:english_words/english_words.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:startup_namer/more_words.dart';
 import 'package:startup_namer/names.dart';
 import 'package:startup_namer/tech_words.dart';
 
@@ -110,5 +111,31 @@ void main() {
     expect(few.map((pair) => pair.join()).toSet(), hasLength(few.length));
     final many = take(tech: true).map((pair) => pair.join());
     expect(many.toSet(), hasLength(many.length));
+  });
+
+  test('more words adds less common words, all lower-case, none repeated or from english_words', () {
+    final all = {...adjectives, ...nouns};
+    expect(extraAdjectives.toSet(), hasLength(extraAdjectives.length));
+    expect(extraNouns.toSet(), hasLength(extraNouns.length));
+    for (final word in [...extraAdjectives, ...extraNouns]) {
+      expect(RegExp(r'^[a-z]{3,14}$').hasMatch(word), isTrue, reason: word);
+      expect(all.contains(word), isFalse, reason: word);
+    }
+    expect(extraAdjectives.length, greaterThan(1500));
+    expect(extraNouns.length, greaterThan(4000));
+  });
+
+  test('more words draws on the extra words too, still keeping each word order', () {
+    final names = namePairs(more: true, longer: true, order: WordOrder.adjectiveNoun, random: Random(7)).take(400).toList();
+    expect(names, hasLength(400));
+    final extra = {...extraAdjectives, ...extraNouns};
+    expect(names.where((pair) => extra.contains(pair.first) || extra.contains(pair.second)), isNotEmpty);
+    for (final pair in names) {
+      expect((adjectives.contains(pair.first) || extraAdjectives.contains(pair.first)) &&
+          (nouns.contains(pair.second) || extraNouns.contains(pair.second)), isTrue, reason: pair.join());
+    }
+    // Without it, none of the extra words.
+    final plain = namePairs(longer: true, random: Random(7)).take(400);
+    expect(plain.where((pair) => extra.contains(pair.first) || extra.contains(pair.second)), isEmpty);
   });
 }

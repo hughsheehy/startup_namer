@@ -10,5 +10,8 @@ _flutter.loader.load({
     const appRunner = await engineInitializer.initializeEngine();
     await appRunner.runApp();
     requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('splash')?.remove()));
+    // Keep the app on the device for next time (sw.js), once it's up and running
+    // so it doesn't compete with starting.
+    navigator.serviceWorker?.register('sw.js');
   },
 });

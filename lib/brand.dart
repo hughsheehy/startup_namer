@@ -4,7 +4,7 @@ import 'package:url_launcher/link.dart';
 
 /// The LoudVector look, from the "Ket" logo: |V⟩, Dirac's notation for the state
 /// vector V, in violet on dark ink. The logo's files are in assets/logo/, copied
-/// from ~/Documents/claude/loudvector-logo/final/.
+/// from brand/final/ in the hughsheehy/loudvector repo.
 abstract final class Brand {
   static const violet = Color(0xFF5B3DF5);
   static const violetOnDark = Color(0xFF9C8CFF);
@@ -23,7 +23,7 @@ abstract final class Brand {
     ).copyWith(primary: dark ? violetOnDark : violet, onSurface: dark ? inkOnDark : ink);
     return ThemeData(
       colorScheme: colours,
-      fontFamily: 'Jost',
+      fontFamily: 'Outfit',
       appBarTheme: const AppBarTheme(centerTitle: true),
     );
   }

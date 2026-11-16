@@ -32,6 +32,7 @@ dependencies:
   http: ^1.6.0
   material_ui: ^1.11.0
   url_launcher: ^6.3.3
+  flutter_svg: ^2.4.0
 
 
 dev_dependencies:
@@ -49,6 +50,10 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # The LoudVector logo (Ket), from ~/Documents/claude/loudvector-logo/final.
+  assets:
+    - assets/logo/
 
   # Jost, a geometric sans close to the LoudVector logo's lettering. SIL Open
   # Font License: assets/fonts/OFL.txt.

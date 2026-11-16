@@ -1,9 +1,10 @@
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/link.dart';
 
 /// The LoudVector look, from the "Ket" logo: |V⟩, Dirac's notation for the state
-/// vector V, in violet on dark ink. The logo's SVGs are in
-/// ~/Documents/claude/loudvector-logo/directions/c-ket/.
+/// vector V, in violet on dark ink. The logo's files are in assets/logo/, copied
+/// from ~/Documents/claude/loudvector-logo/final/.
 abstract final class Brand {
   static const violet = Color(0xFF5B3DF5);
   static const violetOnDark = Color(0xFF9C8CFF);
@@ -26,34 +27,6 @@ abstract final class Brand {
       appBarTheme: const AppBarTheme(centerTitle: true),
     );
   }
-}
-
-/// The app icon: |V⟩ in white on a violet tile, drawn as the logo's icon.svg is.
-class KetIcon extends StatelessWidget {
-  const KetIcon({super.key, this.size = 24});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size.square(size), painter: const _KetIconPainter());
-}
-
-class _KetIconPainter extends CustomPainter {
-  const _KetIconPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.scale(size.width / 32); // icon.svg's viewBox is 32 square.
-    final white = Paint()..color = const Color(0xFFFFFFFF);
-    canvas.drawRRect(RRect.fromLTRBR(0, 0, 32, 32, const Radius.circular(7)), Paint()..color = Brand.violet);
-    canvas.drawRect(const Rect.fromLTRB(4.25, 7, 6.75, 25), white);
-    canvas.drawPath(_polygon(const [(8.75, 9.5), (11.74, 9.5), (14.25, 15.44), (16.76, 9.5), (19.75, 9.5), (14.25, 22.5)]), white);
-    canvas.drawPath(_polygon(const [(20.5, 7), (23.3, 7), (27.8, 16), (23.3, 25), (20.5, 25), (25, 16)]), white);
-  }
-
-  @override
-  bool shouldRepaint(_KetIconPainter oldDelegate) => false;
 }
 
 /// [text] between the logo's violet bar and angle bracket, like |LoudVector⟩.
@@ -104,36 +77,45 @@ class _BracketPainter extends CustomPainter {
 Path _polygon(List<(double, double)> points) => Path()
   ..addPolygon([for (final (x, y) in points) Offset(x, y)], true);
 
-/// The strip along the bottom: whose app it is, and a link to buy them chocolate.
+/// The strip along the bottom: a link to buy chocolate, and below it "Built by
+/// LoudVector" with the logo.
 class BrandFooter extends StatelessWidget {
   const BrandFooter({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final colours = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final builtBy = Semantics(
+      label: 'Built by LoudVector',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Built by', style: TextStyle(fontSize: 15, color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(width: 10),
+          SvgPicture.asset('assets/logo/icon-small.svg', width: 22, height: 22),
+          const SizedBox(width: 8),
+          SvgPicture.asset('assets/logo/lockup-${dark ? 'dark' : 'light'}.svg', height: 18),
+        ],
+      ),
+    );
+    final chocolate = Link(
+      uri: Brand.chocolate,
+      target: LinkTarget.blank,
+      builder: (context, open) => TextButton.icon(
+        onPressed: open,
+        icon: const _ChocolateBar(),
+        label: const Text('Buy me chocolate'),
+      ),
+    );
     return Material(
-      color: colours.surfaceContainerLow,
+      color: theme.colorScheme.surfaceContainerLow,
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-          child: Row(
-            children: [
-              const KetIcon(size: 20),
-              const SizedBox(width: 8),
-              const Text('LoudVector', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
-              const Spacer(),
-              Link(
-                uri: Brand.chocolate,
-                target: LinkTarget.blank,
-                builder: (context, open) => TextButton.icon(
-                  onPressed: open,
-                  icon: const _ChocolateBar(),
-                  label: const Text('Buy me chocolate'),
-                ),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [chocolate, builtBy]),
         ),
       ),
     );

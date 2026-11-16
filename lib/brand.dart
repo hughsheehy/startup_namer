@@ -45,15 +45,19 @@ class KetTitle extends StatelessWidget {
     return Semantics(
       label: text,
       excludeSemantics: true,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: height * 5 / 52, height: height, color: colour),
-          SizedBox(width: height * 0.22),
-          Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w500, letterSpacing: 0.3)),
-          SizedBox(width: height * 0.13),
-          CustomPaint(size: Size(height * 17.5 / 52, height), painter: _BracketPainter(colour)),
-        ],
+      // On a very narrow screen, smaller rather than cut off.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: height * 5 / 52, height: height, color: colour),
+            SizedBox(width: height * 0.22),
+            Text(text, style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w500, letterSpacing: 0.3)),
+            SizedBox(width: height * 0.13),
+            CustomPaint(size: Size(height * 17.5 / 52, height), painter: _BracketPainter(colour)),
+          ],
+        ),
       ),
     );
   }

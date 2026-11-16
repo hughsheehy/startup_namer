@@ -236,4 +236,26 @@ void main() {
     expect(link.target, LinkTarget.blank);
     await tester.pump(const Duration(seconds: 30));
   });
+
+  testWidgets('on a wide screen the app keeps to a column down the middle', (tester) async {
+    tester.view.physicalSize = const Size(3840, 2160);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    final list = tester.getRect(find.byType(Scaffold).first);
+    expect(list.width, 720);
+    expect(list.center.dx, 1920);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('on a phone the app uses the whole width', (tester) async {
+    tester.view.physicalSize = const Size(375, 812);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    expect(tester.getRect(find.byType(Scaffold).first).width, 375);
+    await tester.pump(const Duration(seconds: 30));
+  });
 }

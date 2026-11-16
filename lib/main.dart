@@ -22,7 +22,46 @@ class NamerApp extends StatelessWidget {
       title: 'Startup Names · LoudVector',
       theme: Brand.theme(Brightness.light),
       darkTheme: Brand.theme(Brightness.dark),
+      builder: (context, app) => _Column(child: app!),
       home: RandomWords(checker: checker),
+    );
+  }
+}
+
+/// Keeps the app to a column down the middle of a wide screen, as on a phone,
+/// rather than stretched across a big monitor. Narrower screens get all of it.
+class _Column extends StatelessWidget {
+  const _Column({required this.child});
+
+  final Widget child;
+  static const maxWidth = 720.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colours = Theme.of(context).colorScheme;
+    final screen = MediaQuery.of(context);
+    final wide = screen.size.width > maxWidth;
+    final width = wide ? maxWidth : screen.size.width;
+    return ColoredBox(
+      color: wide ? colours.surfaceContainer : colours.surface,
+      child: Center(
+        child: SizedBox(
+          width: width,
+          // So everything inside, dialogs included, sizes to the column.
+          child: MediaQuery(
+            data: screen.copyWith(size: Size(width, screen.size.height)),
+            child: DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                border: Border.symmetric(
+                  vertical: wide ? BorderSide(color: colours.outlineVariant) : BorderSide.none,
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

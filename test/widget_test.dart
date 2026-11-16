@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:url_launcher/link.dart';
 
 import 'package:startup_namer/main.dart';
 import 'package:startup_namer/tech_words.dart';
@@ -16,7 +17,7 @@ void main() {
       return http.Response('', name.startsWith('a') ? 404 : 200);
     });
     await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
-    expect(find.text('Startup Name Generator'), findsOneWidget);
+    expect(find.text('Startup Names'), findsOneWidget);
     expect(find.textContaining('Checking'), findsWidgets);
 
     await tester.pump(const Duration(seconds: 30));
@@ -220,5 +221,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ListTile), findsOneWidget); // ...but is still saved.
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('the footer says whose app it is and links to buying chocolate', (tester) async {
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DotComChecker(client: client)));
+    expect(find.text('LoudVector'), findsOneWidget);
+    expect(find.text('Buy me chocolate'), findsOneWidget);
+    final link = tester.widget<Link>(find.ancestor(of: find.text('Buy me chocolate'), matching: find.byType(Link)));
+    expect(link.uri.toString(), 'https://ko-fi.com/irishfolklore');
+    expect(link.target, LinkTarget.blank);
+    await tester.pump(const Duration(seconds: 30));
   });
 }

@@ -31,6 +31,7 @@ dependencies:
   english_words: ^4.0.0
   http: ^1.6.0
   material_ui: ^1.11.0
+  url_launcher: ^6.3.3
 
 
 dev_dependencies:
@@ -48,6 +49,17 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Jost, a geometric sans close to the LoudVector logo's lettering. SIL Open
+  # Font License: assets/fonts/OFL.txt.
+  fonts:
+    - family: Jost
+      fonts:
+        - asset: assets/fonts/Jost-Regular.ttf
+        - asset: assets/fonts/Jost-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Jost-SemiBold.ttf
+          weight: 600
 
   # To add assets to your application, add an assets section, like this:
   # assets:

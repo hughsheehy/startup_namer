@@ -1,10 +1,10 @@
 {
-    "name": "Startup Name Generator",
-    "short_name": "Namer",
+    "name": "Startup Names · LoudVector",
+    "short_name": "Startup Names",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#5B3DF5",
+    "theme_color": "#5B3DF5",
     "description": "Startup name ideas, with whether each name's .com is free.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
@@ -31,5 +31,6 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "id": "/"
 }

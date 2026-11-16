@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
 
+import 'brand.dart';
 import 'names.dart';
 
 void main() => runApp(NamerApp(checker: DotComChecker()));
@@ -18,11 +19,9 @@ class NamerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Startup Name Generator',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        appBarTheme: const AppBarTheme(centerTitle: true),
-      ),
+      title: 'Startup Names · LoudVector',
+      theme: Brand.theme(Brightness.light),
+      darkTheme: Brand.theme(Brightness.dark),
       home: RandomWords(checker: checker),
     );
   }
@@ -321,7 +320,7 @@ class _RandomWordsState extends State<RandomWords> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Startup Name Generator'),
+        title: const KetTitle('Startup Names'),
         actions: [
           IconButton(
             icon: const Icon(Icons.list),
@@ -434,6 +433,7 @@ class _RandomWordsState extends State<RandomWords> {
           ),
         ],
       ),
+      bottomNavigationBar: const BrandFooter(),
     );
   }
 
@@ -443,7 +443,7 @@ class _RandomWordsState extends State<RandomWords> {
       pair,
       trailing: Icon(
         alreadySaved ? Icons.favorite : Icons.favorite_border,
-        color: alreadySaved ? Colors.red : null,
+        color: alreadySaved ? Theme.of(context).colorScheme.primary : null,
         semanticLabel: alreadySaved ? 'Remove from saved' : 'Save',
       ),
       onTap: () => setState(() {
@@ -457,11 +457,12 @@ class _RandomWordsState extends State<RandomWords> {
     final domain = '${pair.asLowerCase}.com';
     final status = widget.checker.statusOf(pair.asLowerCase);
     final colours = Theme.of(context).colorScheme;
+    final green = Theme.of(context).brightness == Brightness.dark ? Colors.green.shade300 : Colors.green.shade700;
     final (text, colour, icon) = switch (status) {
       DotCom.checking when widget.checker.slowedDown =>
         ('Checking $domain… (more slowly for now)', colours.outline, Icons.hourglass_empty),
       DotCom.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
-      DotCom.free => ('$domain is free', Colors.green.shade700, Icons.check_circle),
+      DotCom.free => ('$domain is free', green, Icons.check_circle),
       DotCom.taken => ('$domain is taken', colours.outline, Icons.block),
       DotCom.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
     };

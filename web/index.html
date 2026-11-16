@@ -31,7 +31,21 @@
     #splash h1 { margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 0.01em; }
     #splash p { margin: 0; max-width: 34ch; color: #474556; }
     #splash .loading { font-size: 15px; color: #5b3df5; }
+    #update {
+      position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 10;
+      display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 18px;
+      border-radius: 999px; background: #5b3df5; color: #fff;
+      font: 15px/1.3 Outfit, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      box-shadow: 0 4px 16px rgba(22, 19, 46, 0.25); white-space: nowrap;
+    }
+    #update button {
+      font: inherit; font-weight: 600; color: #5b3df5; background: #fff; border: 0;
+      border-radius: 999px; padding: 8px 16px; cursor: pointer;
+    }
+    #update button:disabled { opacity: 0.7; cursor: default; }
     @media (prefers-color-scheme: dark) {
+      #update { background: #9c8cff; color: #13121c; }
+      #update button { color: #13121c; background: #f3f2fa; }
       html, body { background: #13121c; }
       #splash { color: #f3f2fa; background: #13121c; }
       #splash p { color: #c8c4d9; }

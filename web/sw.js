@@ -4,8 +4,9 @@
 // tool/build_web.py fills in BUILD and FILES after `flutter build web`. Each
 // build gets its own cache, filled all at once when this worker installs, so a
 // visit never mixes files from two builds. A new build installs in the
-// background and takes over once every tab of the app has closed: updates show
-// on the next visit after a deploy.
+// background and waits. The page then offers to reload (flutter_bootstrap.js):
+// if asked, the new build takes over at once and every open tab reloads onto it.
+// Otherwise it takes over once every tab of the app has closed.
 //
 // Left unstamped (a plain `flutter build web`), it removes itself and its caches
 // instead, so a build made without the script can't leave anyone on an old copy.
@@ -27,6 +28,11 @@ self.addEventListener('install', (event) => {
   // All or nothing: if any file can't be fetched, this build isn't installed and
   // the app carries on from the network as before.
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(FILES)));
+});
+
+// The page's "Reload" button: take over now rather than when the tabs close.
+self.addEventListener('message', (event) => {
+  if (event.data === 'take over') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

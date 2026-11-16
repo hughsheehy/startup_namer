@@ -23,3 +23,11 @@ const techWords = [
   'forge', 'loom', 'kiln', 'mint', 'hive', 'spark', 'flare', 'pulse', 'nexus', 'apex',
   'rune', 'cog', 'rivet',
 ];
+
+/// The tech words that read as adjectives (SolarStone, RiverSonic), for when the
+/// word order asks for an adjective; the rest count as nouns.
+const techAdjectives = [
+  'solar', 'lunar', 'polar', 'sonic', 'optic', 'cyber', 'binary', 'nano', 'giga', 'tera',
+];
+
+final techNouns = [for (final word in techWords) if (!techAdjectives.contains(word)) word];

@@ -1,7 +1,7 @@
 // The web build, served at startupnames.loudvector.com by a Cloudflare Worker
 // with static assets (no code of its own).
 // Build, then deploy from this folder:
-//   flutter build web --release --base-href /
+//   flutter build web --wasm --release --base-href /
 //   npx wrangler deploy
 {
   "name": "startupnames",

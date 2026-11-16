@@ -8,6 +8,7 @@
   <title>Startup Names · LoudVector</title>
   <meta name="description" content="Startup name ideas, with whether each name's .com is free. Pick the word order, a starting letter, or a word of your own.">
   <meta name="theme-color" content="#5B3DF5">
+  <meta name="color-scheme" content="light dark">
 
   <!-- Installed as an app: iOS and Android. -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -19,8 +20,50 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    The page shown while the app loads. Flutter draws everything on a canvas,
+    which page-speed tools (Largest Contentful Paint) don't count as content, so
+    without real text here PageSpeed reports NO_LCP and can't score the page. It
+    also gives people on slow phones something to read while ~3 MB loads.
+    Colours are the app's own surface and text, light and dark.
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #fcf8ff; }
+    #splash {
+      position: fixed; inset: 0; z-index: 1;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; padding: 24px; box-sizing: border-box; text-align: center;
+      font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: #16132e; background: #fcf8ff;
+    }
+    #splash img { width: min(290px, 70vw); height: auto; margin-bottom: 8px; }
+    #splash h1 { margin: 0; font-size: 26px; font-weight: 500; letter-spacing: 0.01em; }
+    #splash p { margin: 0; max-width: 34ch; color: #474556; }
+    #splash .loading { font-size: 15px; color: #5b3df5; }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #13121c; }
+      #splash { color: #f3f2fa; background: #13121c; }
+      #splash p { color: #c8c4d9; }
+      #splash .loading { color: #9c8cff; }
+    }
+  </style>
 </head>
 <body>
+  <div id="splash">
+    <picture>
+      <source srcset="icons/lockup-dark.svg" media="(prefers-color-scheme: dark)">
+      <img src="icons/lockup-light.svg" alt="LoudVector" width="290" height="42">
+    </picture>
+    <h1>Startup Names</h1>
+    <p>Startup name ideas, with whether each name's .com is free. Pick the word order, a starting letter, or a word of your own.</p>
+    <p class="loading">Loading…</p>
+    <noscript><p>This app needs JavaScript turned on.</p></noscript>
+  </div>
+  <script>
+    // Flutter announces its first drawn frame; the app then covers the page.
+    window.addEventListener('flutter-first-frame', () => document.getElementById('splash')?.remove());
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

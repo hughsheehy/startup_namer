@@ -25,7 +25,7 @@ WEB = ROOT / 'build' / 'web'
 # which is kept as "./", the address the app is opened at.
 SKIP = re.compile(
     r'^(canvaskit/|main\.dart\.js$|assets/NOTICES$|flutter\.js(\.map)?$|.*\.(map|symbols)$'
-    r'|flutter_service_worker\.js$|sw\.js$|version\.json$|\.last_build_id$|index\.html$)'
+    r'|flutter_service_worker\.js$|sw\.js$|version\.json$|\.last_build_id$|index\.html$|_headers$)'
 )
 
 
@@ -48,6 +48,11 @@ def main() -> None:
     revision = re.search(r'"engineRevision":"([0-9a-f]+)"', (WEB / 'flutter_bootstrap.js').read_text()).group(1)
     # Chromium browsers' renderer; others fetch skwasm_heavy, kept on first use.
     renderer = [f'https://www.gstatic.com/flutter-canvaskit/{revision}/{name}' for name in ('skwasm.js', 'skwasm.wasm')]
+
+    # index.html starts the big downloads early, in Chromium browsers (the ones
+    # Flutter gives the WebAssembly build to), from the engine's own renderer.
+    index = WEB / 'index.html'
+    index.write_text(index.read_text().replace("'__ENGINE__'", f"'{revision}'", 1))
 
     # The build's id changes whenever any kept file does.
     digest = hashlib.sha256(revision.encode())

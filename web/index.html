@@ -17,6 +17,32 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
   <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <script>
+    (() => {
+      const engine = '__ENGINE__';
+      const chromium = navigator.vendor === 'Google Inc.' || navigator.userAgent.includes('Edg/');
+      const wasmGC = typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]));
+      if (engine.startsWith('__') || !chromium || !wasmGC) return;
+      const add = (rel, href, as) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        link.href = href;
+        if (as) link.as = as;
+        link.crossOrigin = 'anonymous';
+        document.head.append(link);
+      };
+      const renderer = `https://www.gstatic.com/flutter-canvaskit/${engine}/`;
+      add('modulepreload', 'main.dart.mjs');
+      add('preload', 'main.dart.wasm', 'fetch');
+      add('modulepreload', renderer + 'skwasm.js');
+      add('preload', renderer + 'skwasm.wasm', 'fetch');
+      for (const font of ['assets/fonts/MaterialIcons-Regular.otf', 'assets/assets/fonts/Outfit-Regular.ttf',
+          'assets/assets/fonts/Outfit-Medium.ttf', 'assets/assets/fonts/Outfit-SemiBold.ttf']) {
+        add('preload', font, 'fetch');
+      }
+    })();
+  </script>
 
   <style>
     html, body { margin: 0; height: 100%; background: #fcf8ff; }

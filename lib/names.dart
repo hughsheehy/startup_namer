@@ -2,7 +2,11 @@ import 'dart:math';
 
 import 'package:english_words/english_words.dart';
 // The package keeps to itself its list of words (and joins) to leave out, the one
-// its own generator uses.
+// its own generator uses, and its one-syllable safe words, worked out ahead.
+// ignore: implementation_imports
+import 'package:english_words/src/words/adjectives_monosyllabic_safe.dart';
+// ignore: implementation_imports
+import 'package:english_words/src/words/nouns_monosyllabic_safe.dart';
 // ignore: implementation_imports
 import 'package:english_words/src/words/unsafe.dart';
 
@@ -146,11 +150,22 @@ final _allNouns = [...nouns, ...extraNouns];
 
 List<String> _words(List<String> list, int maxSyllables) => _wordLists.putIfAbsent(
       (list, maxSyllables),
-      () => [
-        for (final word in list)
-          if (RegExp(r'^[a-z]+$').hasMatch(word) && !_unsafe.contains(word) && syllables(word) <= maxSyllables) word,
-      ],
+      () => switch ((list, maxSyllables)) {
+        // The default: the package's own one-syllable lists, so the app doesn't
+        // count syllables for 3,000 words as it starts.
+        (adjectives, 1) => [for (final word in adjectivesMonosyllabicSafe) if (_lowerCase.hasMatch(word)) word],
+        (nouns, 1) => [for (final word in nounsMonosyllabicSafe) if (_lowerCase.hasMatch(word)) word],
+        _ => _counted(list, maxSyllables),
+      },
     );
+
+final _lowerCase = RegExp(r'^[a-z]+$');
+
+/// The lower-case, safe words of `list` of up to `maxSyllables`, counted.
+List<String> _counted(List<String> list, int maxSyllables) => [
+      for (final word in list)
+        if (_lowerCase.hasMatch(word) && !_unsafe.contains(word) && syllables(word) <= maxSyllables) word,
+    ];
 
 List<String> _startingWith(List<String> list, String letter) =>
     letter.isEmpty ? list : [for (final word in list) if (word.startsWith(letter)) word];

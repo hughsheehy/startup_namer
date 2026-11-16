@@ -5,7 +5,7 @@
     "display": "standalone",
     "background_color": "#5B3DF5",
     "theme_color": "#5B3DF5",
-    "description": "Startup name ideas, with whether each name's .com is free.",
+    "description": "Startup name ideas, with whether each name's domain is free: .com, .ai, .dev and more.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

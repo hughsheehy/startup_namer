@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ · Startup Names · LoudVector</title>
+  <meta name="description" content="How Startup Names makes names, how it checks whether each domain is free with the registries' RDAP services, and what it does and doesn't see.">
+  <link rel="canonical" href="https://startupnames.loudvector.com/faq">
+  <meta name="theme-color" content="#5B3DF5">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <style>
+    @font-face { font-family: Outfit; font-weight: 400; font-display: swap; src: url(assets/assets/fonts/Outfit-Regular.ttf) format("truetype"); }
+    @font-face { font-family: Outfit; font-weight: 500; font-display: swap; src: url(assets/assets/fonts/Outfit-Medium.ttf) format("truetype"); }
+    @font-face { font-family: Outfit; font-weight: 600; font-display: swap; src: url(assets/assets/fonts/Outfit-SemiBold.ttf) format("truetype"); }
+    :root {
+      --bg: #fcf8ff; --backdrop: #f0ecfa; --ink: #16132e; --muted: #474556;
+      --violet: #5b3df5; --line: #c9c4d9; --card: #f6f2fc; --free: #2e7d32;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #13121c; --backdrop: #201e29; --ink: #f3f2fa; --muted: #c8c4d9;
+        --violet: #9c8cff; --line: #47454f; --card: #1c1b26; --free: #81c784;
+      }
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--backdrop); }
+    body {
+      margin: 0 auto; max-width: 720px; min-height: 100vh; padding: 0 16px 48px;
+      background: var(--bg); color: var(--ink);
+      font: 17px/1.55 Outfit, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      border-inline: 1px solid var(--line);
+    }
+    @media (max-width: 720px) { body { border-inline: 0; } }
+    header { padding: 28px 0 8px; text-align: center; }
+    header img { width: min(240px, 60vw); height: auto; }
+    h1 { font-size: 30px; font-weight: 500; margin: 18px 0 4px; letter-spacing: 0.01em; }
+    h1 .bar { color: var(--violet); }
+    .intro { color: var(--muted); margin: 0 0 8px; }
+    nav.top { text-align: center; margin: 4px 0 20px; }
+    a { color: var(--violet); text-underline-offset: 2px; }
+    a.button {
+      display: inline-block; padding: 10px 18px; border: 1px solid var(--line); border-radius: 999px;
+      text-decoration: none; font-weight: 600; font-size: 15px; background: var(--bg);
+    }
+    h2 { font-size: 21px; font-weight: 600; margin: 34px 0 6px; }
+    p, li { margin: 0 0 10px; }
+    ul { padding-left: 22px; margin: 0 0 10px; }
+    code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.86em; overflow-wrap: anywhere; }
+    .example { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 0 0 12px; }
+    .free { color: var(--free); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 15px; }
+    th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-weight: 600; }
+    td:first-child { font-weight: 600; white-space: nowrap; }
+    footer { margin-top: 40px; text-align: center; color: var(--muted); font-size: 15px; }
+    footer p { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <picture>
+      <source srcset="icons/lockup-dark.svg" media="(prefers-color-scheme: dark)">
+      <img src="icons/lockup-light.svg" alt="LoudVector" width="240" height="34">
+    </picture>
+    <h1><span class="bar">|</span>Startup Names<span class="bar">⟩</span> FAQ</h1>
+    <p class="intro">How the names are made, how domains are checked, and what the app does and doesn't see.</p>
+  </header>
+  <nav class="top"><a class="button" href="./">Open Startup Names</a></nav>
+
+  <main>
+    <h2>What is Startup Names?</h2>
+    <p>It makes two-word names for a company or product, like BrightRiver or StoneVector, and checks whether each one's domain is free. Scroll for more names, tap a name to save it, and use the list button at the top to see the names you've saved.</p>
+
+    <h2>Where do the words come from?</h2>
+    <p>From lists of the most used English adjectives and nouns (829 adjectives and 2,537 nouns, from the <a href="https://pub.dev/packages/english_words">english_words</a> package). Words that could offend are left out, and so are words the lists capitalize: names of religions, nationalities and people.</p>
+    <p>By default each name is two short words, two syllables in all. <strong>Longer words</strong> lets in two-syllable words, for up to three syllables. <strong>Tech words</strong> makes one of the two words one of 110 words from science and technology, like quark, pixel or flux.</p>
+
+    <h2>What do the other options do?</h2>
+    <ul>
+      <li><strong>Word order</strong>: mixed (an adjective or noun, then a noun), adjective + noun (BrightRiver), noun + adjective (RiverBright) or noun + noun (StoneRiver).</li>
+      <li><strong>Starting letter</strong>: every name starts with the letter you pick.</li>
+      <li><strong>Your own word</strong>: a word of yours in every name, first, second or in either place. With tech words on as well, the other word is a tech word.</li>
+      <li><strong>Domains</strong>: which endings to check, like .com, .ai and .dev.</li>
+    </ul>
+    <p>If the options can't make any name (say, your word first and a starting letter it doesn't start with), the list says so. If they can only make a few, it shows them all once.</p>
+
+    <h2>How is a domain checked?</h2>
+    <p>Your browser asks the registry that runs the domain ending, using its public <strong>RDAP</strong> service (Registration Data Access Protocol). RDAP is how registries publish who holds a domain; it replaced WHOIS. For brightriver.com, the app asks Verisign, which runs .com:</p>
+    <p class="example"><code>https://rdap.verisign.com/com/v1/domain/brightriver.com</code></p>
+    <p>If the domain is registered, the registry answers with its record. If nobody has registered it, the registry answers <em>404 Not Found</em>, and the app shows it as <span class="free">free</span>.</p>
+    <p>The app asks each registry about two domains at a time, with a short pause in between, and asks about each domain once. Each registry has its own queue, so a slow one doesn't hold up the others.</p>
+
+    <h2>Which domain endings can it check, and who answers?</h2>
+    <table>
+      <thead><tr><th>Ending</th><th>Registry</th><th>RDAP service</th></tr></thead>
+      <tbody>
+        <tr><td>.com</td><td>Verisign</td><td><code>rdap.verisign.com/com/v1/</code></td></tr>
+        <tr><td>.net</td><td>Verisign</td><td><code>rdap.verisign.com/net/v1/</code></td></tr>
+        <tr><td>.org</td><td>Public Interest Registry</td><td><code>rdap.publicinterestregistry.org/rdap/</code></td></tr>
+        <tr><td>.ai</td><td>Identity Digital</td><td><code>rdap.identitydigital.services/rdap/</code></td></tr>
+        <tr><td>.app</td><td>Google Registry</td><td><code>pubapi.registry.google/rdap/</code></td></tr>
+        <tr><td>.dev</td><td>Google Registry</td><td><code>pubapi.registry.google/rdap/</code></td></tr>
+        <tr><td>.tech</td><td>Radix</td><td><code>rdap.radix.host/rdap/</code></td></tr>
+        <tr><td>.xyz</td><td>CentralNic</td><td><code>rdap.centralnic.com/xyz/</code></td></tr>
+        <tr><td>.info</td><td>Identity Digital</td><td><code>rdap.identitydigital.services/rdap/</code></td></tr>
+        <tr><td>.uk</td><td>Nominet</td><td><code>rdap.nominet.uk/uk/</code></td></tr>
+      </tbody>
+    </table>
+    <p>Registries that run more than one ending, like Verisign for .com and .net, share one queue, since they share their limits too.</p>
+
+    <h2>Why only these endings?</h2>
+    <p>A web page can only use a registry's RDAP service if three things are true. The service must be listed in <a href="https://data.iana.org/rdap/dns.json">IANA's directory of RDAP services</a>, so its address is official. It must let web pages read its answers. And it must answer 404 for a name nobody has registered. These ten endings pass all three, checked in November 2026.</p>
+    <p>Some popular endings don't:</p>
+    <ul>
+      <li><strong>.io and .co</strong> have working RDAP services, but they aren't in IANA's directory, so their addresses could change without notice.</li>
+      <li><strong>.nl</strong>: the registry, SIDN, limits lookups very strictly.</li>
+      <li><strong>.de</strong>: the registry, DENIC, has an RDAP service, but doesn't let web pages read its answers.</li>
+      <li><strong>.ie, .eu and .me</strong> have no public RDAP service.</li>
+    </ul>
+
+    <h2>Does "free" mean I can register it?</h2>
+    <p>Not always. Free means nobody had registered the domain when the app asked. Registries hold some names back, sell others at premium prices (common with .ai and short names), and someone else can register a name at any moment. Check with a registrar before you rely on a name.</p>
+
+    <h2>Why does a check say "Couldn't check", or go slowly?</h2>
+    <p>Registries limit how often one connection can ask. If a registry answers "too many requests", doesn't answer, or can't be reached, the app slows down for that registry, waiting twice as long between tries each time, up to a minute (or as long as the registry asks). It speeds up again once the registry answers. A note above the list says what's happening and with which registry.</p>
+    <p>Names that couldn't be checked say so. Tap one to try again, or use <strong>Check again</strong> in the note. Limits apply to your own connection, not to everyone using the app.</p>
+
+    <h2>Does LoudVector see the names I look at or save?</h2>
+    <p>No. The names are made in your browser, and the domain checks go straight from your browser to each registry. LoudVector's server, hosted on Cloudflare, only delivers the app's files. The app sets no cookies and has no accounts or analytics.</p>
+    <p>The registries do see which domains your browser asks about, as with any lookup. The app's drawing engine and some fonts come from Google's servers (gstatic.com). Saved names stay in the open page only: reloading clears them.</p>
+
+    <h2>Does it work offline?</h2>
+    <p>After your first visit, the app is kept on your device, so it opens quickly and opens without a connection. Domain checks still need one. When the app is updated, the new version appears the next time you open it after closing it.</p>
+    <p>You can also install it as an app: choose <strong>Install</strong> or <strong>Add to Home Screen</strong> in your browser's menu.</p>
+
+    <h2>Who made it?</h2>
+    <p><a href="https://loudvector.com">LoudVector</a> built it with <a href="https://flutter.dev">Flutter</a>, starting from the startup name example in Google's first Flutter codelab. If you like it, you can <a href="https://ko-fi.com/loudvector">buy me chocolate</a>.</p>
+  </main>
+
+  <footer>
+    <p><a class="button" href="./">Open Startup Names</a></p>
+    <p>Built by <a href="https://loudvector.com">LoudVector</a></p>
+  </footer>
+</body>
+</html>

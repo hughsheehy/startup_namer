@@ -1,20 +1,17 @@
-import 'dart:async';
-import 'dart:collection';
-
 import 'package:english_words/english_words.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:material_ui/material_ui.dart';
 
 import 'brand.dart';
+import 'domains.dart';
 import 'names.dart';
 
-void main() => runApp(NamerApp(checker: DotComChecker()));
+void main() => runApp(NamerApp(checker: DomainChecker()));
 
 class NamerApp extends StatelessWidget {
   const NamerApp({super.key, required this.checker});
 
-  final DotComChecker checker;
+  final DomainChecker checker;
 
   @override
   Widget build(BuildContext context) {
@@ -66,211 +63,10 @@ class _Column extends StatelessWidget {
   }
 }
 
-/// What the .com registry says about a name's .com.
-enum DotCom { checking, free, taken, unknown }
-
-/// What keeps going wrong with the .com checks, if anything.
-enum Trouble {
-  none,
-
-  /// The registry answers, or will, but takes more than a few seconds.
-  slow,
-
-  /// No answer at all before the checks give up waiting.
-  noReply,
-
-  /// Couldn't connect: offline, blocked, or turned away without a readable answer.
-  cantConnect,
-
-  /// The registry said too many requests (429) or too busy (503).
-  limited,
-
-  /// The registry answered with some other error, like 500.
-  errors,
-}
-
-/// Asks the .com registry (Verisign's public RDAP service, which any web page may
-/// ask) whether each name's .com is registered: it answers 404 for one nobody has.
-/// Two at a time, a moment apart, and each name once.
-///
-/// The registry publishes no limit, but may refuse a browser that asks too often
-/// (429 Too Many Requests). Then, or if it can't be reached, the checks slow
-/// down, waiting twice as long each time up to a minute (or as long as the
-/// registry says), and speed up again once it answers.
-///
-/// A check that goes wrong, or takes more than [slowAfter], counts as a problem.
-/// Once [persistent] checks in a row have, [trouble] says what the latest was,
-/// until a check gets a quick answer.
-class DotComChecker extends ChangeNotifier {
-  DotComChecker({http.Client? client}) : _client = client ?? http.Client();
-
-  final http.Client _client;
-  final Map<String, DotCom> _found = {};
-  final Queue<String> _waiting = Queue();
-  int _running = 0;
-  Timer? _pause;
-  Duration _backOff = Duration.zero;
-  int _problemsInARow = 0;
-  Trouble _lastProblem = Trouble.none;
-  int? _lastError;
-  static const _atOnce = 2;
-  static const _gap = Duration(milliseconds: 250);
-  static const _longestBackOff = Duration(minutes: 1);
-  static const timeout = Duration(seconds: 10);
-  static const slowAfter = Duration(seconds: 3);
-  static const persistent = 2;
-
-  /// Whether the registry has pushed back, or not answered, and checks are slower.
-  bool get slowedDown => _backOff > Duration.zero;
-
-  /// What keeps going wrong, once [persistent] checks in a row have gone wrong.
-  Trouble get trouble => _problemsInARow >= persistent ? _lastProblem : Trouble.none;
-
-  /// How many checks in a row have gone wrong or been slow.
-  int get problemsInARow => _problemsInARow;
-
-  /// The HTTP status of the latest error answer, for [Trouble.errors].
-  int? get lastError => _lastError;
-
-  /// How long checks wait between tries while slowed down.
-  Duration get waitBetweenTries => _gap + _backOff;
-
-  /// How many names so far couldn't be checked.
-  int get unchecked => _found.values.where((status) => status == DotCom.unknown).length;
-
-  /// The answer so far for `name` (letters only, like "neatchip"), asking if it's new.
-  DotCom statusOf(String name) {
-    final known = _found[name];
-    if (known != null) return known;
-    _found[name] = DotCom.checking;
-    _waiting.add(name);
-    _next();
-    return DotCom.checking;
-  }
-
-  void _next() {
-    if (_pause != null) return;
-    while (_running < _atOnce && _waiting.isNotEmpty) {
-      final name = _waiting.removeFirst();
-      _running++;
-      _check(name).whenComplete(() {
-        _running--;
-        _pause ??= Timer(_gap + _backOff, () {
-          _pause = null;
-          _next();
-        });
-      });
-    }
-  }
-
-  Future<void> _check(String name) async {
-    // A check still waiting after a few seconds is a problem already, so a
-    // registry that doesn't answer shows as slow before the check gives up.
-    var counted = false;
-    final slow = Timer(slowAfter, () {
-      counted = true;
-      _problem(Trouble.slow);
-    });
-    final http.Response response;
-    try {
-      response = await _client.get(Uri.https('rdap.verisign.com', '/com/v1/domain/$name.com')).timeout(timeout);
-    } on TimeoutException {
-      _slowDown();
-      _problem(Trouble.noReply, counted: counted);
-      _answer(name, DotCom.unknown);
-      return;
-    } catch (_) {
-      // Offline, or a refusal the page isn't let read (a browser hides an answer
-      // that lacks the header saying any page may read it), so slow down too.
-      _slowDown();
-      _problem(Trouble.cantConnect, counted: counted);
-      _answer(name, DotCom.unknown);
-      return;
-    } finally {
-      slow.cancel();
-    }
-    switch (response.statusCode) {
-      case 404 || 200:
-        _backOff = Duration.zero;
-        if (!counted) _problemsInARow = 0; // A quick answer: all's well again.
-        _answer(name, response.statusCode == 404 ? DotCom.free : DotCom.taken);
-      case 429 || 503:
-        // Asked too often, or too busy: ask again, after a pause.
-        final seconds = int.tryParse(response.headers['retry-after'] ?? '');
-        _slowDown(seconds == null ? null : Duration(seconds: seconds));
-        _waiting.addFirst(name);
-        _problem(Trouble.limited, counted: counted);
-      default:
-        _lastError = response.statusCode;
-        _problem(Trouble.errors, counted: counted);
-        _answer(name, DotCom.unknown);
-    }
-  }
-
-  /// Notes a check that went wrong, once per check: a slow one that then fails
-  /// is still one problem, now described by how it failed.
-  void _problem(Trouble kind, {bool counted = false}) {
-    if (!counted) _problemsInARow++;
-    _lastProblem = kind;
-    notifyListeners();
-  }
-
-  void _slowDown([Duration? asked]) {
-    final doubled = _backOff == Duration.zero ? const Duration(seconds: 2) : _backOff * 2;
-    _backOff = asked ?? (doubled > _longestBackOff ? _longestBackOff : doubled);
-  }
-
-  void _answer(String name, DotCom answer) {
-    _found[name] = answer;
-    notifyListeners();
-  }
-
-  /// Asks again, now, about a name that couldn't be checked.
-  void retry(String name) {
-    if (_found[name] != DotCom.unknown) return;
-    _found[name] = DotCom.checking;
-    _waiting.addFirst(name);
-    _pause?.cancel();
-    _pause = null;
-    _next();
-    notifyListeners();
-  }
-
-  /// Asks again, now, about every name that couldn't be checked.
-  void retryAll() {
-    final names = [for (final MapEntry(:key, :value) in _found.entries) if (value == DotCom.unknown) key];
-    for (final name in names.reversed) {
-      _found[name] = DotCom.checking;
-      _waiting.addFirst(name);
-    }
-    _pause?.cancel();
-    _pause = null;
-    _next();
-    notifyListeners();
-  }
-
-  /// Forgets the names not yet asked about, and those that couldn't be checked,
-  /// as when the list starts again, so names no longer shown aren't asked about.
-  /// Any that show again are asked then.
-  void dropWaiting() {
-    for (final name in _waiting) {
-      _found.remove(name);
-    }
-    _waiting.clear();
-    _found.removeWhere((_, status) => status == DotCom.unknown);
-  }
-
-  @override
-  void dispose() {
-    _pause?.cancel();
-    super.dispose();
-  }
-}
-
 class RandomWords extends StatefulWidget {
   const RandomWords({super.key, required this.checker});
 
-  final DotComChecker checker;
+  final DomainChecker checker;
 
   @override
   State<RandomWords> createState() => _RandomWordsState();
@@ -287,6 +83,7 @@ class _RandomWordsState extends State<RandomWords> {
   String _letter = ''; // Every name starts with this, if set.
   String _word = ''; // Every name has this word, if set...
   Place _place = Place.either; // ...here.
+  List<Tld> _tlds = [tlds.first]; // The domain endings checked: .com to start.
   late Iterator<WordPair> _pairs = _newPairs();
 
   Iterator<WordPair> _newPairs() => namePairs(
@@ -345,6 +142,17 @@ class _RandomWordsState extends State<RandomWords> {
       builder: (context) => _LetterDialog(letter: _letter),
     );
     if (letter != null) _setWords(letter: letter);
+  }
+
+  Future<void> _pickTlds() async {
+    final chosen = await showDialog<List<Tld>>(
+      context: context,
+      builder: (context) => _TldDialog(chosen: _tlds),
+    );
+    if (chosen == null) return;
+    // The names stay; only what's checked changes.
+    widget.checker.dropWaiting();
+    setState(() => _tlds = chosen);
   }
 
   Future<void> _pickWord() async {
@@ -433,6 +241,14 @@ class _RandomWordsState extends State<RandomWords> {
                   onDeleted: _word.isEmpty ? null : () => _setWords(word: ''),
                   deleteButtonTooltipMessage: 'No word of my own',
                 ),
+                FilterChip(
+                  avatar: const Icon(Icons.public),
+                  showCheckmark: false,
+                  label: Text('${_tlds.first}${_tlds.length > 1 ? ' +${_tlds.length - 1}' : ''}'),
+                  tooltip: 'Which domain endings to check, like .com or .ai',
+                  selected: !(_tlds.length == 1 && _tlds.single.name == 'com'),
+                  onSelected: (_) => _pickTlds(),
+                ),
               ],
             ),
           ),
@@ -491,68 +307,88 @@ class _RandomWordsState extends State<RandomWords> {
     );
   }
 
-  /// A name, with whether its .com is free under it.
+  /// A name, with whether its domains are free under it: a sentence for one TLD
+  /// ("neatchip.com is free"), a short status per TLD for several.
   ListTile _tile(WordPair pair, {Widget? trailing, VoidCallback? onTap}) {
-    final domain = '${pair.asLowerCase}.com';
-    final status = widget.checker.statusOf(pair.asLowerCase);
-    final colours = Theme.of(context).colorScheme;
-    final green = Theme.of(context).brightness == Brightness.dark ? Colors.green.shade300 : Colors.green.shade700;
-    final (text, colour, icon) = switch (status) {
-      DotCom.checking when widget.checker.slowedDown =>
-        ('Checking $domain… (more slowly for now)', colours.outline, Icons.hourglass_empty),
-      DotCom.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
-      DotCom.free => ('$domain is free', green, Icons.check_circle),
-      DotCom.taken => ('$domain is taken', colours.outline, Icons.block),
-      DotCom.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
-    };
+    final name = pair.asLowerCase;
     return ListTile(
       title: Text(pair.asPascalCase, style: _biggerFont),
-      subtitle: GestureDetector(
-        onTap: status == DotCom.unknown ? () => widget.checker.retry(pair.asLowerCase) : null,
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: colour),
-            const SizedBox(width: 6),
-            Flexible(child: Text(text, style: TextStyle(color: colour))),
-          ],
-        ),
-      ),
+      subtitle: _tlds.length == 1
+          ? _domain(name, _tlds.single, brief: false)
+          : Wrap(spacing: 14, runSpacing: 2, children: [for (final tld in _tlds) _domain(name, tld, brief: true)]),
       trailing: trailing,
       onTap: onTap,
     );
   }
+
+  /// Whether `name` is free under [tld]: in a sentence, or [brief]ly as the
+  /// ending alone, with the sentence as its tooltip. One that couldn't be
+  /// checked is asked again when tapped.
+  Widget _domain(String name, Tld tld, {required bool brief}) {
+    final domain = '$name.${tld.name}';
+    final status = widget.checker.statusOf(name, tld);
+    final colours = Theme.of(context).colorScheme;
+    final green = Theme.of(context).brightness == Brightness.dark ? Colors.green.shade300 : Colors.green.shade700;
+    final (sentence, colour, icon) = switch (status) {
+      Availability.checking when widget.checker.registryFor(tld).slowedDown =>
+        ('Checking $domain… (more slowly for now)', colours.outline, Icons.hourglass_empty),
+      Availability.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
+      Availability.free => ('$domain is free', green, Icons.check_circle),
+      Availability.taken => ('$domain is taken', colours.outline, Icons.block),
+      Availability.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
+    };
+    final row = Row(
+      mainAxisSize: brief ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        Icon(icon, size: brief ? 15 : 16, color: colour),
+        SizedBox(width: brief ? 3 : 6),
+        if (brief) Text('$tld', style: TextStyle(color: colour)) else Flexible(child: Text(sentence, style: TextStyle(color: colour))),
+      ],
+    );
+    return GestureDetector(
+      onTap: status == Availability.unknown ? () => widget.checker.retry(name, tld) : null,
+      child: brief ? Tooltip(message: sentence, child: Semantics(label: sentence, excludeSemantics: true, child: row)) : row,
+    );
+  }
 }
 
-/// A notice above the list while the .com checks keep going wrong, saying what's
-/// wrong. It goes once a check gets a quick answer again.
+/// A notice above the list while a registry's checks keep going wrong, saying
+/// what's wrong. It goes once a check there gets a quick answer again.
 class _TroubleNotice extends StatelessWidget {
   const _TroubleNotice({required this.checker});
 
-  final DotComChecker checker;
+  final DomainChecker checker;
 
   @override
   Widget build(BuildContext context) {
-    const registry = 'rdap.verisign.com';
+    final troubled = checker.troubled;
+    if (troubled == null) return const SizedBox.shrink();
+    final registry = troubled.host;
     const carryOn = "Checks carry on, more slowly, and names that couldn't be checked say so.";
-    final n = checker.problemsInARow;
-    final trouble = checker.trouble;
+    final n = troubled.problemsInARow;
+    final trouble = troubled.trouble;
+    // "The .com check is…", or "The .com and .net checks are…" for a registry
+    // that answers for more than one TLD.
+    final endings = troubled.endings;
+    final one = endings.length < 2;
+    final which = one ? 'The ${endings.firstOrNull ?? 'domain'} check' : 'The ${endings.sublist(0, endings.length - 1).join(', ')} and ${endings.last} checks';
     final described = switch (trouble) {
       Trouble.none => null,
       Trouble.slow => (
           Icons.hourglass_bottom,
-          'The .com check is slow',
-          'The registry ($registry) is taking more than ${DotComChecker.slowAfter.inSeconds} seconds to answer, '
+          '$which ${one ? 'is' : 'are'} slow',
+          'The registry ($registry) is taking more than ${RegistryChecker.slowAfter.inSeconds} seconds to answer, '
               'when it usually answers in under a second. Names are still being checked, just slowly.',
         ),
       Trouble.noReply => (
           Icons.cloud_off,
-          "The .com check isn't getting answers",
-          'Checks are getting no reply from the registry ($registry) within ${DotComChecker.timeout.inSeconds} '
+          "$which ${one ? "isn't" : "aren't"} getting answers",
+          'Checks are getting no reply from the registry ($registry) within ${RegistryChecker.timeout.inSeconds} '
               'seconds. It may be down or overloaded, or this connection very slow. $carryOn',
         ),
       Trouble.cantConnect => (
           Icons.wifi_off,
-          "The .com check can't reach the registry",
+          "$which can't reach the registry",
           "Checks can't connect to $registry. This device may be offline, this network may block it, "
               'or the registry may be turning this browser away. $carryOn',
         ),
@@ -560,12 +396,12 @@ class _TroubleNotice extends StatelessWidget {
           Icons.front_hand,
           'The registry is limiting checks',
           '$registry is answering "too many requests" or "too busy", so checks now wait '
-              '${checker.waitBetweenTries.inSeconds} seconds between tries, until it lets them through again.',
+              '${troubled.waitBetweenTries.inSeconds} seconds between tries, until it lets them through again.',
         ),
       Trouble.errors => (
           Icons.error_outline,
           'The registry is answering with errors',
-          '$registry is answering with error ${checker.lastError}, probably a fault at its end. $carryOn',
+          '$registry is answering with error ${troubled.lastError}, probably a fault at its end. $carryOn',
         ),
     };
     if (described == null) return const SizedBox.shrink();
@@ -573,7 +409,7 @@ class _TroubleNotice extends StatelessWidget {
     final detail = '$problem\n$n checks in a row have had trouble so far.';
     final colours = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final serious = trouble != Trouble.slow && trouble != Trouble.limited;
+    final serious = trouble.serious;
     final (background, foreground) = serious
         ? (colours.errorContainer, colours.onErrorContainer)
         : (colours.secondaryContainer, colours.onSecondaryContainer);
@@ -599,7 +435,7 @@ class _TroubleNotice extends StatelessWidget {
                       Text(title, style: text.titleSmall?.copyWith(color: foreground, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 2),
                       Text(detail, style: text.bodyMedium?.copyWith(color: foreground)),
-                      if (checker.unchecked > 0 && trouble != Trouble.limited)
+                      if (troubled.unchecked > 0 && trouble != Trouble.limited)
                         Align(
                           alignment: AlignmentDirectional.centerEnd,
                           child: TextButton(
@@ -621,6 +457,55 @@ class _TroubleNotice extends StatelessWidget {
 }
 
 String _capital(String word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1);
+
+/// Picks the domain endings to check, at least one: answers them in the order
+/// of [tlds], or nothing if cancelled.
+class _TldDialog extends StatefulWidget {
+  const _TldDialog({required this.chosen});
+
+  final List<Tld> chosen;
+
+  @override
+  State<_TldDialog> createState() => _TldDialogState();
+}
+
+class _TldDialogState extends State<_TldDialog> {
+  late final _chosen = {...widget.chosen};
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Domains to check'),
+      contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
+      content: SizedBox(
+        width: 320,
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final tld in tlds)
+              CheckboxListTile(
+                value: _chosen.contains(tld),
+                title: Text('$tld'),
+                subtitle: Text(tld.registry),
+                dense: true,
+                // At least one, or there'd be nothing to check.
+                onChanged: _chosen.length == 1 && _chosen.contains(tld)
+                    ? null
+                    : (on) => setState(() => on! ? _chosen.add(tld) : _chosen.remove(tld)),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, [for (final tld in tlds) if (_chosen.contains(tld)) tld]),
+          child: const Text('Done'),
+        ),
+      ],
+    );
+  }
+}
 
 /// Picks the letter names start with: answers it, '' for any letter, or nothing
 /// if cancelled.

@@ -56,10 +56,15 @@ def main() -> None:
         digest.update((WEB / name).read_bytes())
     build = digest.hexdigest()[:12]
 
+    # Cloudflare serves page.html at /page and redirects page.html there, and a
+    # service worker can't answer a visit to a page with a redirect, so pages are
+    # kept under their clean addresses.
+    kept = [name[:-len('.html')] if name.endswith('.html') else name for name in files]
+
     sw = WEB / 'sw.js'
     text = sw.read_text()
     text = text.replace("const BUILD = 'unstamped';", f"const BUILD = '{build}';", 1)
-    text = re.sub(r'/\*FILES\*/.*?/\*END\*/', lambda _: '/*FILES*/' + json.dumps(['./', *files, *renderer]) + '/*END*/', text, count=1, flags=re.S)
+    text = re.sub(r'/\*FILES\*/.*?/\*END\*/', lambda _: '/*FILES*/' + json.dumps(['./', *kept, *renderer]) + '/*END*/', text, count=1, flags=re.S)
     if f"'{build}'" not in text or 'skwasm.wasm' not in text:
         raise SystemExit('Could not stamp build/web/sw.js: has web/sw.js changed shape?')
     sw.write_text(text)

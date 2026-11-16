@@ -1,5 +1,5 @@
 name: startup_namer
-description: Startup name ideas, with whether each name's .com is free.
+description: Startup name ideas, with whether each name's domain is free.
 
 # The following line prevents the package from being accidentally published to
 # pub.dev using `pub publish`. This is preferred for private packages.

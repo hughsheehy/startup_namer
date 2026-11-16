@@ -17,6 +17,10 @@ abstract final class Brand {
   /// Where "Built by LoudVector" goes.
   static final home = Uri.parse('https://loudvector.com');
 
+  /// The questions and answers page (web/faq.html). Cloudflare serves it at
+  /// /faq, and redirects faq.html there.
+  static final faq = Uri.parse('faq');
+
   static ThemeData theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
     final colours = ColorScheme.fromSeed(
@@ -139,6 +143,21 @@ class BrandFooter extends StatelessWidget {
         ),
       ),
     );
+    // In a tab of its own, so the list and saved names stay as they are.
+    final faq = Link(
+      uri: Brand.faq,
+      target: LinkTarget.blank,
+      builder: (context, open) => TextButton(
+        onPressed: open,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          foregroundColor: colours.primary,
+          textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 15, fontWeight: FontWeight.w500),
+        ),
+        child: const Text('FAQ'),
+      ),
+    );
     return Material(
       color: colours.surfaceContainerLow,
       child: SafeArea(
@@ -147,7 +166,16 @@ class BrandFooter extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [chocolate, const SizedBox(height: 14), builtBy],
+            children: [
+              chocolate,
+              const SizedBox(height: 14),
+              // Side by side, or one above the other on a very narrow screen.
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [builtBy, faq],
+              ),
+            ],
           ),
         ),
       ),

@@ -11,6 +11,7 @@ import 'package:english_words/src/words/nouns_monosyllabic_safe.dart';
 import 'package:english_words/src/words/unsafe.dart';
 
 import 'more_words.dart';
+import 'spelling.dart';
 import 'tech_words.dart';
 
 /// Which kind of word goes first and which second, with a word of each kind for
@@ -42,79 +43,168 @@ enum Place {
   final String label;
 }
 
+/// A name the app suggests: one word, or two run together (BoldBond).
+class Name {
+  Name(this.words) : assert(words.isNotEmpty && words.every((word) => word.isNotEmpty));
+
+  /// Lower-case but for a Hub ending, which keeps its capital (sparkHub).
+  final List<String> words;
+
+  String get first => words.first;
+  String get last => words.last;
+
+  /// As its domain has it: boldbond, sparkhub.
+  String get asLowerCase => words.join().toLowerCase();
+
+  /// As it shows: BoldBond, SparkHub, Tumblr.
+  String get asPascalCase => [for (final word in words) word[0].toUpperCase() + word.substring(1)].join();
+
+  @override
+  bool operator ==(Object other) => other is Name && other.asPascalCase == asPascalCase;
+
+  @override
+  int get hashCode => asPascalCase.hashCode;
+
+  @override
+  String toString() => asPascalCase;
+}
+
 enum _Kind { adjective, noun, either }
 
-/// One way of making a name: the lists to pick its first word from and those for
-/// its second (one list at random, then a word from it), and whether both words
+/// One way of making a name: for each of its words, the lists to pick that word
+/// from (one list at random, then a word from it), and whether all its words
 /// are plain English words.
-typedef _Way = ({List<List<String>> first, List<List<String>> second, bool plain});
+typedef _Way = ({List<List<List<String>>> words, bool plain});
+
+/// Where a word of a name comes from: its lists, given the most syllables its
+/// words may have (which only plain words heed).
+typedef _Slot = List<List<String>> Function(int syllables);
 
 /// Names made as the original codelab did, from the most used English words.
 ///
 /// By default, an adjective or noun then a noun, two syllables in all; [order]
-/// picks the kinds of word instead. [more] adds 2,000 more adjectives and 4,700
-/// more nouns, less common ones too (tundra, velocity, celestial), from
-/// [extraAdjectives] and [extraNouns]. [longer] lets in two-syllable words (river,
-/// signal), for up to three syllables. [tech] makes one of the two words one of
-/// [techWords]. [letter] is the letter every name starts with, and [word] a word
-/// of the user's own that's in every name, in the [place] asked for; with [tech]
-/// as well, the other word is the tech word. Each name comes once. If nothing
-/// fits (no adjective starts with x, say), or every name that does has been
-/// given, the names run out.
+/// picks the kinds of word instead. [oneWord] makes names of a single word, an
+/// adjective or a noun of up to two syllables, best with a twist or an ending.
+/// [more] adds 2,000 more adjectives and 4,700 more nouns, less common ones too
+/// (tundra, velocity, celestial), from [extraAdjectives] and [extraNouns].
+/// [longer] lets in words a syllable longer (river, signal). [tech] makes one
+/// of the two words one of [techWords], or the one word a tech word. [letter]
+/// is the letter every name starts with, and [word] a word of the user's own
+/// that's in every name, in the [place] asked for; with [tech] as well, the
+/// other word is the tech word. [sameLetter] makes the second word start as the
+/// first does (PayPal).
+///
+/// With [twists], one word of every name is spelled differently by one of
+/// them (Tumblr, Lyft); with [endings], the last word of every name has one of
+/// them (Spotify). With both, each name has one or the other. [letter] goes by
+/// the name as twisted: kool starts with k.
+///
+/// Each name comes once. If nothing fits (no adjective starts with x, say), or
+/// every name that does has been given, the names run out.
 ///
 /// Words the list capitalizes are left out: religions, nationalities and people
 /// (Christian, French, God, Mrs).
-Iterable<WordPair> namePairs({
+Iterable<Name> suggestNames({
   bool longer = false,
   bool more = false,
   bool tech = false,
+  bool oneWord = false,
   WordOrder order = WordOrder.mixed,
   String letter = '',
   String word = '',
   Place place = Place.either,
+  Set<Twist> twists = const {},
+  Set<Ending> endings = const {},
+  bool sameLetter = false,
   Random? random,
 }) sync* {
   final rand = random ?? Random();
   letter = letter.toLowerCase();
   word = word.toLowerCase();
   final maxPerWord = longer ? 2 : 1;
+  // One word may be as long as two would have been together.
+  final maxSyllables = oneWord ? maxPerWord + 1 : maxPerWord;
   final (firstKind, secondKind) = switch (order) {
+    _ when oneWord => (_Kind.either, _Kind.either),
     WordOrder.mixed => (_Kind.either, _Kind.noun),
     WordOrder.adjectiveNoun => (_Kind.adjective, _Kind.noun),
     WordOrder.nounAdjective => (_Kind.noun, _Kind.adjective),
     WordOrder.nounNoun => (_Kind.noun, _Kind.noun),
   };
 
-  // An "either" slot is half adjectives and half nouns, as the codelab had it. The
-  // first word is the one that has to start with the letter.
-  List<List<String>> only(List<List<String>> lists, bool first) =>
-      [for (final list in lists) first ? _startingWith(list, letter) : list].where((l) => l.isNotEmpty).toList();
-  List<List<String>> plain(_Kind kind, {bool first = false}) => only([
-        if (kind != _Kind.noun) _words(more ? _allAdjectives : adjectives, maxPerWord),
-        if (kind != _Kind.adjective) _words(more ? _allNouns : nouns, maxPerWord),
-      ], first);
-  List<List<String>> techy(_Kind kind, {bool first = false}) => only([
+  // An "either" slot is half adjectives and half nouns, as the codelab had it.
+  _Slot plain(_Kind kind) => (syllables) => [
+        if (kind != _Kind.noun) _words(more ? _allAdjectives : adjectives, syllables),
+        if (kind != _Kind.adjective) _words(more ? _allNouns : nouns, syllables),
+      ];
+  _Slot techy(_Kind kind) => (_) => [
         switch (kind) {
           _Kind.adjective => techAdjectives,
           _Kind.noun => techNouns,
           _Kind.either => techWords,
         },
-      ], first);
-  List<List<String>> mine({bool first = false}) => only([[word]], first);
-  List<List<String>> other(_Kind kind, {bool first = false}) =>
-      tech ? techy(kind, first: first) : plain(kind, first: first);
+      ];
+  List<List<String>> mine(int _) => [
+        [word],
+      ];
+  _Slot other(_Kind kind) => tech ? techy(kind) : plain(kind);
 
   // Plain words, or a tech word in either place, or the user's word in the place
-  // asked (and the other word plain or tech).
-  final ways = <_Way>[
-    if (word.isEmpty && !tech) (first: plain(firstKind, first: true), second: plain(secondKind), plain: true),
-    if (word.isEmpty && tech) ...[
-      (first: techy(firstKind, first: true), second: plain(secondKind), plain: false),
-      (first: plain(firstKind, first: true), second: techy(secondKind), plain: false),
+  // asked (and the other word plain or tech). One word is the user's, or else
+  // plain or tech.
+  final shapes = <({List<_Slot> words, bool plain})>[
+    if (oneWord) (words: [word.isNotEmpty ? mine : other(_Kind.either)], plain: word.isEmpty && !tech),
+    if (!oneWord && word.isEmpty && !tech) (words: [plain(firstKind), plain(secondKind)], plain: true),
+    if (!oneWord && word.isEmpty && tech) ...[
+      (words: [techy(firstKind), plain(secondKind)], plain: false),
+      (words: [plain(firstKind), techy(secondKind)], plain: false),
     ],
-    if (word.isNotEmpty && place != Place.second) (first: mine(first: true), second: other(secondKind), plain: false),
-    if (word.isNotEmpty && place != Place.first) (first: other(firstKind, first: true), second: mine(), plain: false),
-  ].where((way) => way.first.isNotEmpty && way.second.isNotEmpty).toList();
+    if (!oneWord && word.isNotEmpty && place != Place.second) (words: [mine, other(secondKind)], plain: false),
+    if (!oneWord && word.isNotEmpty && place != Place.first) (words: [other(firstKind), mine], plain: false),
+  ];
+
+  // With twists, any one word twisted, and it may be a syllable longer: most
+  // twists suit one-syllable words, but dropping a vowel suits two (tumbler),
+  // and makes them read shorter. With endings, the last word ended, and kept
+  // short, as the names that do it are (Spotify, Bitly).
+  final styled = <_Way>[
+    for (final shape in shapes) ...[
+      if (twists.isEmpty && endings.isEmpty) (words: [for (final slot in shape.words) slot(maxSyllables)], plain: shape.plain),
+      if (twists.isNotEmpty)
+        for (var i = 0; i < shape.words.length; i++)
+          (
+            words: [
+              for (var j = 0; j < shape.words.length; j++)
+                j == i ? _twisted(shape.words[j](maxPerWord + 1), twists) : shape.words[j](maxSyllables),
+            ],
+            plain: false,
+          ),
+      if (endings.isNotEmpty)
+        (
+          words: [
+            for (final slot in shape.words.sublist(0, shape.words.length - 1)) slot(maxSyllables),
+            _ended(shape.words.last(maxPerWord), endings),
+          ],
+          plain: false,
+        ),
+    ],
+  ];
+
+  // The first word is the one that has to start with the letter. Lists left
+  // empty go, and ways with a word that has none.
+  final ways = [
+    for (final way in styled)
+      (
+        words: [
+          for (var i = 0; i < way.words.length; i++)
+            [
+              for (final list in way.words[i])
+                if ((i == 0 ? _startingWith(list, letter) : list) case final kept when kept.isNotEmpty) kept,
+            ],
+        ],
+        plain: way.plain,
+      ),
+  ].where((way) => way.words.every((lists) => lists.isNotEmpty)).toList();
   if (ways.isEmpty) return;
 
   String pick(List<List<String>> lists) {
@@ -126,22 +216,69 @@ Iterable<WordPair> namePairs({
   const giveUpAfter = 2000; // Tries in a row without a new name.
   for (var misses = 0; misses < giveUpAfter; misses++) {
     final way = ways[rand.nextInt(ways.length)];
-    final first = pick(way.first), second = pick(way.second);
-    final name = '$first$second';
-    // As the package does, skip words that run into each other ("neonnode"), and
-    // two plain words that sound longer together than apart ("timetime").
-    if (first == second || first.codeUnits.last == second.codeUnits.first) continue;
+    final first = pick(way.words.first);
+    final words = [first];
+    if (way.words.length == 2) {
+      var lists = way.words.last;
+      if (sameLetter) {
+        lists = [
+          for (final list in lists)
+            if (_startingWith(list, first[0]) case final kept when kept.isNotEmpty) kept,
+        ];
+        if (lists.isEmpty) continue;
+      }
+      final second = pick(lists);
+      // As the package does, skip words that run into each other ("neonnode").
+      if (first == second.toLowerCase() || first.codeUnits.last == second.toLowerCase().codeUnits.first) continue;
+      words.add(second);
+    }
+    final name = words.join().toLowerCase();
     if (_unsafePairs.contains(name)) continue;
-    if (way.plain && syllables(name) > maxPerWord + 1) continue;
+    // And two plain words that sound longer together than apart ("timetime").
+    if (way.plain && words.length == 2 && syllables(name) > maxPerWord + 1) continue;
     if (!given.add(name)) continue;
     misses = -1;
-    yield WordPair(first, second);
+    yield Name(words);
   }
 }
 
 final _unsafe = unsafe.toSet();
 final _unsafePairs = unsafePairs.toSet();
 final _wordLists = <(List<String>, int), List<String>>{};
+final _styledLists = <(List<String>, Object), List<String>>{};
+final _byLetter = <(List<String>, String), List<String>>{};
+
+/// Every word the app has, plain: a twist or an ending that makes one of them
+/// (night to nite, lob to lobster) isn't a twist.
+final _plainWords = {...adjectives, ...nouns, ...extraAdjectives, ...extraNouns, ...techWords};
+
+/// Each word of `lists` spelled by each of `twists` that suits it.
+List<List<String>> _twisted(List<List<String>> lists, Set<Twist> twists) => [
+      for (final list in lists)
+        _styled(list, (Twist.values.where(twists.contains).toList(), 'twist'),
+            (word) => [for (final twist in Twist.values) if (twists.contains(twist)) twist.apply(word)]),
+    ];
+
+/// Each word of `lists` with each of `endings` that suits it.
+List<List<String>> _ended(List<List<String>> lists, Set<Ending> endings) => [
+      for (final list in lists)
+        _styled(list, (Ending.values.where(endings.contains).toList(), 'ending'),
+            (word) => [for (final ending in Ending.values) if (endings.contains(ending)) ending.apply(word)]),
+    ];
+
+/// The new spellings `style` gives the words of `list`, but none that is a plain
+/// word or unsafe, worked out once for each list and style. (A user's own word
+/// is a list of its own each time, so it isn't kept.)
+List<String> _styled(List<String> list, (List<Object>, String) key, List<String?> Function(String) style) {
+  List<String> make() => {
+        for (final word in list)
+          for (final styled in style(word))
+            if (styled != null && !_plainWords.contains(styled.toLowerCase()) && !_unsafe.contains(styled.toLowerCase()))
+              styled,
+      }.toList();
+  if (list.length < 50) return make();
+  return _styledLists.putIfAbsent((list, '${key.$2}:${key.$1.join(',')}'), make);
+}
 
 /// The lower-case, safe words of `list` of up to `maxSyllables`, worked out once.
 /// The words with "More words" on: english_words' and the extra ones.
@@ -164,8 +301,13 @@ final _lowerCase = RegExp(r'^[a-z]+$');
 /// The lower-case, safe words of `list` of up to `maxSyllables`, counted.
 List<String> _counted(List<String> list, int maxSyllables) => [
       for (final word in list)
-        if (_lowerCase.hasMatch(word) && !_unsafe.contains(word) && syllables(word) <= maxSyllables) word,
+        if (_lowerCase.hasMatch(word) && !_unsafe.contains(word) && syllablesOf(word) <= maxSyllables) word,
     ];
 
-List<String> _startingWith(List<String> list, String letter) =>
-    letter.isEmpty ? list : [for (final word in list) if (word.startsWith(letter)) word];
+/// The words of `list` that start with `letter`: all of them for ''. Kept for
+/// the long lists, which the same-letter option asks again and again.
+List<String> _startingWith(List<String> list, String letter) {
+  if (letter.isEmpty) return list;
+  List<String> make() => [for (final word in list) if (word.startsWith(letter)) word];
+  return list.length < 50 ? make() : _byLetter.putIfAbsent((list, letter), make);
+}

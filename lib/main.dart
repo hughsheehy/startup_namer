@@ -1,4 +1,3 @@
-import 'package:english_words/english_words.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/link.dart';
@@ -6,6 +5,7 @@ import 'package:url_launcher/link.dart';
 import 'brand.dart';
 import 'domains.dart';
 import 'names.dart';
+import 'spelling.dart';
 
 void main() => runApp(NamerApp(checker: DomainChecker()));
 
@@ -74,24 +74,32 @@ class RandomWords extends StatefulWidget {
 }
 
 class _RandomWordsState extends State<RandomWords> {
-  final _suggestions = <WordPair>[];
-  final _saved = <WordPair>{};
+  final _suggestions = <Name>[];
+  final _saved = <Name>{};
   final _biggerFont = const TextStyle(fontSize: 18);
   final _scroll = ScrollController();
   bool _tech = false;
   bool _longer = false;
   bool _more = false;
+  bool _oneWord = false;
+  Set<Twist> _twists = {};
+  Set<Ending> _endings = {};
+  bool _sameLetter = false;
   WordOrder _order = WordOrder.mixed;
   String _letter = ''; // Every name starts with this, if set.
   String _word = ''; // Every name has this word, if set...
   Place _place = Place.either; // ...here.
   List<Tld> _tlds = [tlds.first]; // The domain endings checked: .com to start.
-  late Iterator<WordPair> _pairs = _newPairs();
+  late Iterator<Name> _names = _newNames();
 
-  Iterator<WordPair> _newPairs() => namePairs(
+  Iterator<Name> _newNames() => suggestNames(
         longer: _longer,
         more: _more,
         tech: _tech,
+        oneWord: _oneWord,
+        twists: _twists,
+        endings: _endings,
+        sameLetter: _sameLetter,
         order: _order,
         letter: _letter,
         word: _word,
@@ -99,18 +107,34 @@ class _RandomWordsState extends State<RandomWords> {
       ).iterator;
 
   /// A fresh list from the top with the options chosen. Saved names stay.
-  void _setWords({bool? tech, bool? longer, bool? more, WordOrder? order, String? letter, String? word, Place? place}) {
+  void _setWords({
+    bool? tech,
+    bool? longer,
+    bool? more,
+    bool? oneWord,
+    Set<Twist>? twists,
+    Set<Ending>? endings,
+    bool? sameLetter,
+    WordOrder? order,
+    String? letter,
+    String? word,
+    Place? place,
+  }) {
     if (_scroll.hasClients) _scroll.jumpTo(0);
     widget.checker.dropWaiting();
     setState(() {
       _tech = tech ?? _tech;
       _longer = longer ?? _longer;
       _more = more ?? _more;
+      _oneWord = oneWord ?? _oneWord;
+      _twists = twists ?? _twists;
+      _endings = endings ?? _endings;
+      _sameLetter = sameLetter ?? _sameLetter;
       _order = order ?? _order;
       _letter = letter ?? _letter;
       _word = word ?? _word;
       _place = place ?? _place;
-      _pairs = _newPairs();
+      _names = _newNames();
       _suggestions.clear();
     });
   }
@@ -131,7 +155,7 @@ class _RandomWordsState extends State<RandomWords> {
             builder: (context, _) => ListView(
               children: ListTile.divideTiles(
                 context: context,
-                tiles: _saved.map((pair) => _tile(pair)),
+                tiles: _saved.map((name) => _tile(name)),
               ).toList(),
             ),
           ),
@@ -151,7 +175,14 @@ class _RandomWordsState extends State<RandomWords> {
   Future<void> _pickTlds() async {
     final chosen = await showDialog<List<Tld>>(
       context: context,
-      builder: (context) => _TldDialog(chosen: _tlds),
+      builder: (context) => _PickDialog<Tld>(
+        title: 'Domains to check',
+        options: tlds,
+        chosen: _tlds,
+        label: (tld) => '$tld',
+        detail: (tld) => tld.registry,
+        atLeastOne: true,
+      ),
     );
     if (chosen == null) return;
     // The names stay; only what's checked changes.
@@ -162,9 +193,42 @@ class _RandomWordsState extends State<RandomWords> {
   Future<void> _pickWord() async {
     final chosen = await showDialog<(String, Place)>(
       context: context,
-      builder: (context) => _WordDialog(word: _word, place: _place, order: _order),
+      builder: (context) => _WordDialog(word: _word, place: _place, order: _order, oneWord: _oneWord),
     );
     if (chosen != null) _setWords(word: chosen.$1, place: chosen.$2);
+  }
+
+  Future<void> _pickTwists() async {
+    final chosen = await showDialog<List<Twist>>(
+      context: context,
+      builder: (context) => _PickDialog<Twist>(
+        title: 'Twist the spelling',
+        note: 'One word of each name is spelled one of these ways.',
+        options: Twist.values,
+        // All of them, the first time.
+        chosen: _twists.isEmpty ? Twist.values : _twists,
+        label: (twist) => twist.label,
+        detail: (twist) => 'Like ${twist.brand}: ${twist.example}',
+        noneLabel: 'No twists',
+      ),
+    );
+    if (chosen != null) _setWords(twists: chosen.toSet());
+  }
+
+  Future<void> _pickEndings() async {
+    final chosen = await showDialog<List<Ending>>(
+      context: context,
+      builder: (context) => _PickDialog<Ending>(
+        title: 'Add an ending',
+        note: "The last word of each name gets one of these endings. They're best on one-word names.",
+        options: Ending.values,
+        chosen: _endings.isEmpty ? Ending.values : _endings,
+        label: (ending) => ending.label,
+        detail: (ending) => 'Like ${ending.brand} or ${Name([ending.apply('jet')!])}',
+        noneLabel: 'No endings',
+      ),
+    );
+    if (chosen != null) _setWords(endings: chosen.toSet());
   }
 
   @override
@@ -213,6 +277,40 @@ class _RandomWordsState extends State<RandomWords> {
                       selected: _more,
                       onSelected: (on) => _setWords(more: on),
                     ),
+                    FilterChip(
+                      label: const Text('One word'),
+                      tooltip: 'Names of one word, like Tumblr or Spotify: best with a twist or an ending',
+                      selected: _oneWord,
+                      onSelected: (on) => _setWords(oneWord: on),
+                    ),
+                    FilterChip(
+                      avatar: const Icon(Icons.auto_fix_high),
+                      showCheckmark: false,
+                      label: Text(switch (_twists.length) {
+                        0 => 'Twist spelling',
+                        1 => 'Twist: ${_twists.single.label}',
+                        final n => '$n twists',
+                      }),
+                      tooltip: 'One word spelled another way, like Tumblr or Lyft',
+                      selected: _twists.isNotEmpty,
+                      onSelected: (_) => _pickTwists(),
+                      onDeleted: _twists.isEmpty ? null : () => _setWords(twists: {}),
+                      deleteButtonTooltipMessage: 'No twists',
+                    ),
+                    FilterChip(
+                      avatar: const Icon(Icons.add_circle_outline),
+                      showCheckmark: false,
+                      label: Text(switch (_endings.length) {
+                        0 => 'Add ending',
+                        1 => 'Ending ${_endings.single.label}',
+                        final n => '$n endings',
+                      }),
+                      tooltip: 'An ending on the last word, like Spotify or Bitly',
+                      selected: _endings.isNotEmpty,
+                      onSelected: (_) => _pickEndings(),
+                      onDeleted: _endings.isEmpty ? null : () => _setWords(endings: {}),
+                      deleteButtonTooltipMessage: 'No endings',
+                    ),
                     MenuAnchor(
                       menuChildren: [
                         for (final order in WordOrder.values)
@@ -226,9 +324,9 @@ class _RandomWordsState extends State<RandomWords> {
                         avatar: const Icon(Icons.swap_horiz),
                         showCheckmark: false,
                         label: Text(_order.label),
-                        tooltip: 'Which kind of word goes first',
-                        selected: _order != WordOrder.mixed,
-                        onSelected: (_) => menu.isOpen ? menu.close() : menu.open(),
+                        tooltip: _oneWord ? 'One-word names have no word order' : 'Which kind of word goes first',
+                        selected: _order != WordOrder.mixed && !_oneWord,
+                        onSelected: _oneWord ? null : (_) => menu.isOpen ? menu.close() : menu.open(),
                       ),
                     ),
                     FilterChip(
@@ -242,10 +340,19 @@ class _RandomWordsState extends State<RandomWords> {
                       deleteButtonTooltipMessage: 'Any letter',
                     ),
                     FilterChip(
+                      label: const Text('Same letter'),
+                      tooltip: _oneWord
+                          ? 'One-word names have only one first letter'
+                          : 'Both words start with the same letter, like PayPal',
+                      selected: _sameLetter && !_oneWord,
+                      onSelected: _oneWord ? null : (on) => _setWords(sameLetter: on),
+                    ),
+                    FilterChip(
                       avatar: const Icon(Icons.edit),
                       showCheckmark: false,
                       label: Text(switch ((_word, _place)) {
                         ('', _) => 'Your own word',
+                        (final word, _) when _oneWord => 'With ${_capital(word)}',
                         (final word, Place.first) => '${_capital(word)} first',
                         (final word, Place.second) => '${_capital(word)} second',
                         (final word, Place.either) => 'With ${_capital(word)}',
@@ -274,8 +381,8 @@ class _RandomWordsState extends State<RandomWords> {
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, i) {
                   final index = i ~/ 2;
-                  while (index >= _suggestions.length && _pairs.moveNext()) {
-                    _suggestions.add(_pairs.current);
+                  while (index >= _suggestions.length && _names.moveNext()) {
+                    _suggestions.add(_names.current);
                   }
                   if (index < _suggestions.length) {
                     return i.isOdd ? const Divider() : _buildRow(_suggestions[index]);
@@ -286,7 +393,7 @@ class _RandomWordsState extends State<RandomWords> {
                       ? const ListTile(
                           leading: Icon(Icons.search_off),
                           title: Text('No names fit these options'),
-                          subtitle: Text('Try another starting letter, word order or place for your word.'),
+                          subtitle: Text('Try another starting letter, twist, word order or place for your word.'),
                         )
                       : const ListTile(
                           leading: Icon(Icons.done_all),
@@ -302,27 +409,27 @@ class _RandomWordsState extends State<RandomWords> {
     );
   }
 
-  Widget _buildRow(WordPair pair) {
-    final alreadySaved = _saved.contains(pair);
+  Widget _buildRow(Name name) {
+    final alreadySaved = _saved.contains(name);
     return _tile(
-      pair,
+      name,
       trailing: Icon(
         alreadySaved ? Icons.favorite : Icons.favorite_border,
         color: alreadySaved ? Theme.of(context).colorScheme.primary : null,
         semanticLabel: alreadySaved ? 'Remove from saved' : 'Save',
       ),
       onTap: () => setState(() {
-        if (!_saved.remove(pair)) _saved.add(pair);
+        if (!_saved.remove(name)) _saved.add(name);
       }),
     );
   }
 
   /// A name, with whether its domains are free under it: a sentence for one TLD
   /// ("neatchip.com is free"), a short status per TLD for several.
-  ListTile _tile(WordPair pair, {Widget? trailing, VoidCallback? onTap}) {
-    final name = pair.asLowerCase;
+  ListTile _tile(Name suggested, {Widget? trailing, VoidCallback? onTap}) {
+    final name = suggested.asLowerCase;
     return ListTile(
-      title: Text(pair.asPascalCase, style: _biggerFont),
+      title: Text(suggested.asPascalCase, style: _biggerFont),
       subtitle: _tlds.length == 1
           ? _domain(name, _tlds.single, brief: false)
           : Wrap(spacing: 14, runSpacing: 2, children: [for (final tld in _tlds) _domain(name, tld, brief: true)]),
@@ -582,48 +689,72 @@ class _RecordSheet extends StatelessWidget {
   }
 }
 
-/// Picks the domain endings to check, at least one: answers them in the order
-/// of [tlds], or nothing if cancelled.
-class _TldDialog extends StatefulWidget {
-  const _TldDialog({required this.chosen});
+/// Picks some of [options], with a [detail] line under each: answers them in
+/// the order of [options], or nothing if cancelled. With [atLeastOne], the last
+/// one ticked can't be unticked; with a [noneLabel], a button answers none.
+class _PickDialog<T> extends StatefulWidget {
+  const _PickDialog({
+    required this.title,
+    required this.options,
+    required this.chosen,
+    required this.label,
+    required this.detail,
+    this.note,
+    this.atLeastOne = false,
+    this.noneLabel,
+  });
 
-  final List<Tld> chosen;
+  final String title;
+  final String? note;
+  final List<T> options;
+  final Iterable<T> chosen;
+  final String Function(T) label;
+  final String Function(T) detail;
+  final bool atLeastOne;
+  final String? noneLabel;
 
   @override
-  State<_TldDialog> createState() => _TldDialogState();
+  State<_PickDialog<T>> createState() => _PickDialogState<T>();
 }
 
-class _TldDialogState extends State<_TldDialog> {
+class _PickDialogState<T> extends State<_PickDialog<T>> {
   late final _chosen = {...widget.chosen};
 
   @override
   Widget build(BuildContext context) {
+    final note = widget.note;
     return AlertDialog(
-      title: const Text('Domains to check'),
+      title: Text(widget.title),
       contentPadding: const EdgeInsets.fromLTRB(8, 16, 8, 0),
       content: SizedBox(
-        width: 320,
+        width: 340,
         child: ListView(
           shrinkWrap: true,
           children: [
-            for (final tld in tlds)
+            if (note != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(note, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ),
+            for (final option in widget.options)
               CheckboxListTile(
-                value: _chosen.contains(tld),
-                title: Text('$tld'),
-                subtitle: Text(tld.registry),
+                value: _chosen.contains(option),
+                title: Text(widget.label(option)),
+                subtitle: Text(widget.detail(option)),
                 dense: true,
-                // At least one, or there'd be nothing to check.
-                onChanged: _chosen.length == 1 && _chosen.contains(tld)
+                // At least one, if asked: there'd be nothing to check.
+                onChanged: widget.atLeastOne && _chosen.length == 1 && _chosen.contains(option)
                     ? null
-                    : (on) => setState(() => on! ? _chosen.add(tld) : _chosen.remove(tld)),
+                    : (on) => setState(() => on! ? _chosen.add(option) : _chosen.remove(option)),
               ),
           ],
         ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        if (widget.noneLabel case final none?) TextButton(onPressed: () => Navigator.pop(context, <T>[]), child: Text(none)),
         FilledButton(
-          onPressed: () => Navigator.pop(context, [for (final tld in tlds) if (_chosen.contains(tld)) tld]),
+          onPressed: () => Navigator.pop(context, [for (final option in widget.options) if (_chosen.contains(option)) option]),
           child: const Text('Done'),
         ),
       ],
@@ -673,11 +804,15 @@ class _LetterDialog extends StatelessWidget {
 /// Picks a word of the user's own for every name, and where it goes: answers
 /// them ('' for no word), or nothing if cancelled.
 class _WordDialog extends StatefulWidget {
-  const _WordDialog({required this.word, required this.place, required this.order});
+  const _WordDialog({required this.word, required this.place, required this.order, required this.oneWord});
 
   final String word;
   final Place place;
   final WordOrder order;
+
+  /// Names are one word, so the user's word is all of each, twisted or ended:
+  /// there's no place to choose.
+  final bool oneWord;
 
   @override
   State<_WordDialog> createState() => _WordDialogState();
@@ -714,24 +849,32 @@ class _WordDialogState extends State<_WordDialog> {
             onChanged: (_) => setState(() {}),
             onSubmitted: (_) => _use(),
           ),
-          const SizedBox(height: 20),
-          const Text('Where it goes'),
-          const SizedBox(height: 8),
-          SegmentedButton<Place>(
-            segments: [for (final place in Place.values) ButtonSegment(value: place, label: Text(place.label))],
-            selected: {_place},
-            showSelectedIcon: false,
-            onSelectionChanged: (chosen) => setState(() => _place = chosen.single),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Like ${switch (_place) {
-              Place.first => first,
-              Place.second => second,
-              Place.either => '$first or $second',
-            }}, in ${widget.order.label.toLowerCase()}',
-            style: TextStyle(color: Theme.of(context).colorScheme.outline),
-          ),
+          if (widget.oneWord) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Names are one word, so each is your word, twisted or with an ending.',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+          ] else ...[
+            const SizedBox(height: 20),
+            const Text('Where it goes'),
+            const SizedBox(height: 8),
+            SegmentedButton<Place>(
+              segments: [for (final place in Place.values) ButtonSegment(value: place, label: Text(place.label))],
+              selected: {_place},
+              showSelectedIcon: false,
+              onSelectionChanged: (chosen) => setState(() => _place = chosen.single),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Like ${switch (_place) {
+                Place.first => first,
+                Place.second => second,
+                Place.either => '$first or $second',
+              }}, in ${widget.order.label.toLowerCase()}',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+          ],
         ],
       ),
       actions: [

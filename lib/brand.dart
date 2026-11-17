@@ -33,6 +33,8 @@ abstract final class Brand {
       colorScheme: colours,
       fontFamily: 'Outfit',
       appBarTheme: const AppBarTheme(centerTitle: true),
+      // Snug chips, so the options take fewer rows on a phone.
+      chipTheme: const ChipThemeData(labelPadding: EdgeInsets.symmetric(horizontal: 4)),
     );
   }
 }

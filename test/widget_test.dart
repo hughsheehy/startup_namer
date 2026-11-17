@@ -55,6 +55,7 @@ void main() {
   });
 
   testWidgets('when the registry says too many, checks wait and ask again', (tester) async {
+    tall(tester);
     var busy = true;
     var asked = 0;
     final client = MockClient((request) async {
@@ -76,6 +77,7 @@ void main() {
   });
 
   testWidgets('a notice says when the registry is slow, then not answering, and goes when it answers', (tester) async {
+    tall(tester);
     var hang = true;
     final client = MockClient((request) async {
       if (hang) await Future<void>.delayed(const Duration(seconds: 30));
@@ -102,6 +104,7 @@ void main() {
   });
 
   testWidgets('a notice says when the registry can\'t be reached', (tester) async {
+    tall(tester);
     var fail = true;
     final client = MockClient((request) async {
       if (fail) throw Exception('offline');
@@ -198,6 +201,85 @@ void main() {
     await tester.tap(find.text('Noun + adjective: RiverBright'));
     await tester.pumpAndSettle();
     expect(find.text('Noun + adjective'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  Iterable<String> titles(WidgetTester tester) =>
+      tester.widgetList<ListTile>(find.byType(ListTile)).map((tile) => (tile.title as Text).data!);
+
+  testWidgets('one word makes one-word names, with no word order or same first letter', (tester) async {
+    tall(tester);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.tap(find.text('One word'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(titles(tester), isNotEmpty);
+    expect(titles(tester).every((title) => RegExp(r'^[A-Z][a-z]+$').hasMatch(title)), isTrue, reason: '${titles(tester)}');
+    FilterChip chip(String label) => tester.widget<FilterChip>(find.ancestor(of: find.text(label), matching: find.byType(FilterChip)));
+    expect(chip('Mixed order').onSelected, isNull);
+    expect(chip('Same letter').onSelected, isNull);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('twists can be picked, start all ticked, and twist every name', (tester) async {
+    tall(tester);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.tap(find.text('Twist spelling'));
+    await tester.pumpAndSettle();
+    expect(find.text('Like Tumblr: paper → papr, bundle → bundl'), findsOneWidget);
+    final boxes = tester.widgetList<CheckboxListTile>(find.byType(CheckboxListTile));
+    expect(boxes.every((box) => box.value!), isTrue);
+    for (final twist in ['Drop a vowel', '-ight to -ite', 'c to k', 'Double the last letter']) {
+      await tester.tap(find.text(twist));
+    }
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Twist: i to y'), findsOneWidget);
+    expect(titles(tester), isNotEmpty);
+    expect(titles(tester).every((title) => title.contains('y')), isTrue, reason: '${titles(tester)}');
+
+    await tester.tap(find.text('Twist: i to y'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('No twists'));
+    await tester.pumpAndSettle();
+    expect(find.text('Twist spelling'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('endings go on the last word of every name', (tester) async {
+    tall(tester);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.tap(find.text('One word'));
+    await tester.pump();
+    await tester.tap(find.text('Add ending'));
+    await tester.pumpAndSettle();
+    expect(find.text('Like Spotify or Jetify'), findsOneWidget);
+    expect(find.text('Like GitHub or JetHub'), findsOneWidget);
+    for (final ending in ['-ly', '-io', '-ster', '-sy', '-hub']) {
+      await tester.tap(find.text(ending));
+    }
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ending -ify'), findsOneWidget);
+    expect(titles(tester), isNotEmpty);
+    expect(titles(tester).every((title) => title.endsWith('ify')), isTrue, reason: '${titles(tester)}');
+    await tester.pump(const Duration(seconds: 30));
+  });
+
+  testWidgets('with the same first letter, both words of every name start alike', (tester) async {
+    tall(tester);
+    final client = MockClient((request) async => http.Response('', 404));
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.tap(find.text('Same letter'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(titles(tester), isNotEmpty);
+    for (final title in titles(tester)) {
+      final capitals = RegExp('[A-Z]').allMatches(title).map((match) => match[0]).toList();
+      expect(capitals, hasLength(2), reason: title);
+      expect(capitals.first, capitals.last, reason: title);
+    }
     await tester.pump(const Duration(seconds: 30));
   });
 

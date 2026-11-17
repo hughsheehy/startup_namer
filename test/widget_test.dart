@@ -479,4 +479,49 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 30));
   });
+
+  testWidgets("a twisted name's details say who has its usual spelling", (tester) async {
+    tall(tester);
+    // The twisted names (all with a y here) are free; their usual spellings
+    // (none with a y) are taken, with a record.
+    final client = MockClient((request) async {
+      final domain = request.url.pathSegments.last;
+      if (domain.contains('y')) return http.Response('', 404);
+      return http.Response(
+          '{"events": [{"eventAction": "registration", "eventDate": "1998-03-02T12:00:00Z"}], '
+          '"entities": [{"roles": ["registrar"], "vcardArray": ["vcard", [["fn", {}, "text", "Example Registrar"]]]}], '
+          '"ldhName": "$domain"}',
+          200);
+    });
+    await tester.pumpWidget(NamerApp(checker: DomainChecker(client: client)));
+    await tester.tap(find.text('One word'));
+    await tester.pump();
+    await tester.tap(find.text('Twist spelling'));
+    await tester.pumpAndSettle();
+    for (final twist in ['Drop a vowel', '-ight to -ite', 'c to k', 'Double the last letter']) {
+      await tester.tap(find.text(twist));
+    }
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+
+    final free = find.textContaining('.com is free').first;
+    final domain = tester.widget<Text>(free).data!.split(' ').first;
+    final spoken = domain.replaceFirst('y', 'i');
+    await tester.tap(free);
+    await tester.pumpAndSettle();
+    expect(find.text(domain), findsOneWidget);
+    expect(find.text('Free'), findsOneWidget);
+    expect(find.text('Sounds like $spoken'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.textContaining('$spoken is taken, so people who hear the name'), findsOneWidget);
+    expect(find.text('2 March 1998'), findsOneWidget);
+    expect(find.text('Example Registrar'), findsOneWidget);
+    final visit = tester.widget<Link>(find.ancestor(of: find.text('Visit $spoken'), matching: find.byType(Link)));
+    expect(visit.uri.toString(), 'https://$spoken');
+    expect(find.text('Visit $domain'), findsNothing); // Free: nothing there to visit.
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 30));
+  });
 }

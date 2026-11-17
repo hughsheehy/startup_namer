@@ -45,10 +45,17 @@ enum Place {
 
 /// A name the app suggests: one word, or two run together (BoldBond).
 class Name {
-  Name(this.words) : assert(words.isNotEmpty && words.every((word) => word.isNotEmpty));
+  Name(this.words, {this.spoken}) : assert(words.isNotEmpty && words.every((word) => word.isNotEmpty));
 
   /// Lower-case but for a Hub ending, which keeps its capital (sparkHub).
   final List<String> words;
+
+  /// For a twisted name, its words spelled the usual way, as people who hear
+  /// it would type it: wise owl for WyseOwl. Null for any other name.
+  final List<String>? spoken;
+
+  /// The usual spelling's domain name, for a twisted name: wiseowl.
+  String? get spokenLowerCase => spoken?.join().toLowerCase();
 
   String get first => words.first;
   String get last => words.last;
@@ -74,7 +81,9 @@ enum _Kind { adjective, noun, either }
 /// One way of making a name: for each of its words, the lists to pick that word
 /// from (one list at random, then a word from it), and whether all its words
 /// are plain English words.
-typedef _Way = ({List<List<List<String>>> words, bool plain});
+///
+/// [twisted] is which word, if any, is twisted.
+typedef _Way = ({List<List<List<String>>> words, bool plain, int? twisted});
 
 /// Where a word of a name comes from: its lists, given the most syllables its
 /// words may have (which only plain words heed).
@@ -169,7 +178,7 @@ Iterable<Name> suggestNames({
   // short, as the names that do it are (Spotify, Bitly).
   final styled = <_Way>[
     for (final shape in shapes) ...[
-      if (twists.isEmpty && endings.isEmpty) (words: [for (final slot in shape.words) slot(maxSyllables)], plain: shape.plain),
+      if (twists.isEmpty && endings.isEmpty) (words: [for (final slot in shape.words) slot(maxSyllables)], plain: shape.plain, twisted: null),
       if (twists.isNotEmpty)
         for (var i = 0; i < shape.words.length; i++)
           (
@@ -178,6 +187,7 @@ Iterable<Name> suggestNames({
                 j == i ? _twisted(shape.words[j](maxPerWord + 1), twists) : shape.words[j](maxSyllables),
             ],
             plain: false,
+            twisted: i,
           ),
       if (endings.isNotEmpty)
         (
@@ -186,6 +196,7 @@ Iterable<Name> suggestNames({
             _ended(shape.words.last(maxPerWord), endings),
           ],
           plain: false,
+          twisted: null,
         ),
     ],
   ];
@@ -203,6 +214,7 @@ Iterable<Name> suggestNames({
             ],
         ],
         plain: way.plain,
+        twisted: way.twisted,
       ),
   ].where((way) => way.words.every((lists) => lists.isNotEmpty)).toList();
   if (ways.isEmpty) return;
@@ -238,7 +250,11 @@ Iterable<Name> suggestNames({
     if (way.plain && words.length == 2 && syllables(name) > maxPerWord + 1) continue;
     if (!given.add(name)) continue;
     misses = -1;
-    yield Name(words);
+    final twisted = way.twisted;
+    yield Name(
+      words,
+      spoken: twisted == null ? null : [for (final (i, word) in words.indexed) i == twisted ? _untwisted[word] ?? word : word],
+    );
   }
 }
 
@@ -252,11 +268,19 @@ final _byLetter = <(List<String>, String), List<String>>{};
 /// (night to nite, lob to lobster) isn't a twist.
 final _plainWords = {...adjectives, ...nouns, ...extraAdjectives, ...extraNouns, ...techWords};
 
+/// Each twisted word, and the word it was twisted from: wyse, wise.
+final _untwisted = <String, String>{};
+
 /// Each word of `lists` spelled by each of `twists` that suits it.
 List<List<String>> _twisted(List<List<String>> lists, Set<Twist> twists) => [
       for (final list in lists)
-        _styled(list, (Twist.values.where(twists.contains).toList(), 'twist'),
-            (word) => [for (final twist in Twist.values) if (twists.contains(twist)) twist.apply(word)]),
+        _styled(list, (Twist.values.where(twists.contains).toList(), 'twist'), (word) {
+          final spelled = [for (final twist in Twist.values) if (twists.contains(twist)) twist.apply(word)];
+          for (final twisted in spelled.nonNulls) {
+            _untwisted.putIfAbsent(twisted, () => word);
+          }
+          return spelled;
+        }),
     ];
 
 /// Each word of `lists` with each of `endings` that suits it.

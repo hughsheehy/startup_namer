@@ -431,8 +431,12 @@ class _RandomWordsState extends State<RandomWords> {
     return ListTile(
       title: Text(suggested.asPascalCase, style: _biggerFont),
       subtitle: _tlds.length == 1
-          ? _domain(name, _tlds.single, brief: false)
-          : Wrap(spacing: 14, runSpacing: 2, children: [for (final tld in _tlds) _domain(name, tld, brief: true)]),
+          ? _domain(name, _tlds.single, brief: false, spoken: suggested.spokenLowerCase)
+          : Wrap(
+              spacing: 14,
+              runSpacing: 2,
+              children: [for (final tld in _tlds) _domain(name, tld, brief: true, spoken: suggested.spokenLowerCase)],
+            ),
       trailing: trailing,
       onTap: onTap,
     );
@@ -441,8 +445,9 @@ class _RandomWordsState extends State<RandomWords> {
   /// Whether `name` is free under [tld]: in a sentence, or [brief]ly as the
   /// ending alone, with the sentence as its tooltip. One that couldn't be
   /// checked is asked again when tapped; a taken one shows what its registry
-  /// says about it.
-  Widget _domain(String name, Tld tld, {required bool brief}) {
+  /// says about it. For a twisted name, [spoken] is its usual spelling, and a
+  /// free one shows who has that.
+  Widget _domain(String name, Tld tld, {required bool brief, String? spoken}) {
     final domain = '$name.${tld.name}';
     final status = widget.checker.statusOf(name, tld);
     final colours = Theme.of(context).colorScheme;
@@ -451,11 +456,15 @@ class _RandomWordsState extends State<RandomWords> {
       Availability.checking when widget.checker.registryFor(tld).slowedDown =>
         ('Checking $domain… (more slowly for now)', colours.outline, Icons.hourglass_empty),
       Availability.checking => ('Checking $domain…', colours.outline, Icons.hourglass_empty),
+      Availability.free when spoken != null =>
+        ('$domain is free: tap to check $spoken.${tld.name}', green, Icons.check_circle),
       Availability.free => ('$domain is free', green, Icons.check_circle),
       Availability.taken => ('$domain is taken: tap for details', colours.outline, Icons.block),
       Availability.unknown => ("Couldn't check $domain: tap to retry", colours.error, Icons.refresh),
     };
     final taken = status == Availability.taken;
+    // A domain with more to see when tapped, which says so with an icon.
+    final details = taken || (status == Availability.free && spoken != null);
     final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -464,25 +473,35 @@ class _RandomWordsState extends State<RandomWords> {
         if (brief)
           Text('$tld', style: TextStyle(color: colour))
         else
-          Flexible(child: Text(taken ? '$domain is taken' : sentence, style: TextStyle(color: colour))),
-        if (taken && !brief) ...[const SizedBox(width: 4), Icon(Icons.info_outline, size: 15, color: colours.primary)],
+          Flexible(
+            child: Text(
+              switch (status) {
+                Availability.taken => '$domain is taken',
+                Availability.free => '$domain is free',
+                _ => sentence,
+              },
+              style: TextStyle(color: colour),
+            ),
+          ),
+        if (details && !brief) ...[const SizedBox(width: 4), Icon(Icons.info_outline, size: 15, color: colours.primary)],
       ],
     );
     return GestureDetector(
       onTap: switch (status) {
         Availability.unknown => () => widget.checker.retry(name, tld),
-        Availability.taken => () => _showRecord(name, tld),
+        _ when details => () => _showDetails(name, tld, spoken),
         _ => null,
       },
       child: brief ? Tooltip(message: sentence, child: Semantics(label: sentence, excludeSemantics: true, child: row)) : row,
     );
   }
 
-  void _showRecord(String name, Tld tld) {
+  void _showDetails(String name, Tld tld, String? spoken) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => _RecordSheet(domain: '$name.${tld.name}', record: widget.checker.recordOf(name, tld)),
+      isScrollControlled: true,
+      builder: (context) => _DomainSheet(checker: widget.checker, name: name, tld: tld, spoken: spoken),
     );
   }
 }
@@ -593,28 +612,35 @@ class _TroubleNotice extends StatelessWidget {
 
 String _capital(String word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1);
 
-/// What a taken domain's registry says about it, and a link to its site.
-class _RecordSheet extends StatelessWidget {
-  const _RecordSheet({required this.domain, this.record});
+/// What a domain's registry says about it if it's taken, with a link to its
+/// site; and for a twisted name, whether its usual spelling is taken too, and
+/// by whom, since people who hear the name will type that.
+class _DomainSheet extends StatelessWidget {
+  const _DomainSheet({required this.checker, required this.name, required this.tld, this.spoken});
 
-  final String domain;
-  final DomainRecord? record;
+  final DomainChecker checker;
+  final String name;
+  final Tld tld;
+
+  /// The name spelled the usual way, for a twisted name: wiseowl for wyseowl.
+  final String? spoken;
 
   static const _months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
       'October', 'November', 'December'];
 
   static String _date(DateTime date) => '${date.day} ${_months[date.month - 1]} ${date.year}';
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colours = theme.colorScheme;
-    final record = this.record;
-    final now = DateTime.now();
-    final daysLeft = record?.expires?.difference(now).inDays;
-    final market = record?.market;
+  /// The registry's record of a taken domain: dates, registrar, name servers,
+  /// and notes on whether it may come free or be for sale.
+  static List<Widget> _record(BuildContext context, DomainRecord? record) {
+    final colours = Theme.of(context).colorScheme;
+    if (record == null) {
+      return [Text("The registry didn't say more about it.", style: TextStyle(color: colours.onSurfaceVariant))];
+    }
+    final daysLeft = record.expires?.difference(DateTime.now()).inDays;
+    final market = record.market;
     final notes = [
-      if (record != null && record.beingDeleted)
+      if (record.beingDeleted)
         'The registry is deleting it, so it may become free soon.'
       else if (daysLeft != null && daysLeft >= 0 && daysLeft <= 60)
         "It expires in $daysLeft ${daysLeft == 1 ? 'day' : 'days'}. If the owner doesn't renew it, it may become free some weeks after that.",
@@ -633,58 +659,109 @@ class _RecordSheet extends StatelessWidget {
             ],
           ),
         );
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(domain, style: theme.textTheme.headlineSmall),
-            const SizedBox(height: 4),
-            Text('Taken', style: TextStyle(color: colours.onSurfaceVariant, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
-            if (record == null)
-              Text("The registry didn't say more about it.", style: TextStyle(color: colours.onSurfaceVariant))
-            else ...[
-              if (record.registered case final registered?) line('Registered', _date(registered)),
-              if (record.expires case final expires?) line('Expires', _date(expires)),
-              if (record.registrar case final registrar?) line('Registrar', registrar),
-              if (record.nameservers.isNotEmpty) line('Name servers', record.nameservers.join(', ')),
-            ],
-            for (final note in notes)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Material(
-                  color: colours.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Text(note, style: TextStyle(color: colours.onSecondaryContainer)),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 20),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+    return [
+      if (record.registered case final registered?) line('Registered', _date(registered)),
+      if (record.expires case final expires?) line('Expires', _date(expires)),
+      if (record.registrar case final registrar?) line('Registrar', registrar),
+      if (record.nameservers.isNotEmpty) line('Name servers', record.nameservers.join(', ')),
+      for (final note in notes)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Material(
+            color: colours.secondaryContainer,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(note, style: TextStyle(color: colours.onSecondaryContainer)),
+            ),
+          ),
+        ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: checker,
+      builder: (context, _) {
+        final theme = Theme.of(context);
+        final colours = theme.colorScheme;
+        final green = theme.brightness == Brightness.dark ? Colors.green.shade300 : Colors.green.shade700;
+        final domain = '$name.${tld.name}';
+        final status = checker.statusOf(name, tld);
+        final spoken = this.spoken;
+        final spokenDomain = '$spoken.${tld.name}';
+        // Asked now, ahead of the list's names: the user is waiting for it.
+        final spokenStatus = spoken == null ? null : checker.statusOf(spoken, tld, first: true);
+        final (label, labelColour) = switch (status) {
+          Availability.free => ('Free', green),
+          Availability.taken => ('Taken', colours.onSurfaceVariant),
+          Availability.checking => ('Checking…', colours.onSurfaceVariant),
+          Availability.unknown => ("Couldn't check", colours.error),
+        };
+        Widget visit(String domain, {bool main = true}) => Link(
+              // In a tab of its own, so the list stays as it is.
+              uri: Uri.https(domain),
+              target: LinkTarget.blank,
+              builder: (context, open) => main
+                  ? FilledButton.icon(
+                      onPressed: open, icon: const Icon(Icons.open_in_new, size: 18), label: Text('Visit $domain'))
+                  : FilledButton.tonalIcon(
+                      onPressed: open, icon: const Icon(Icons.open_in_new, size: 18), label: Text('Visit $domain')),
+            );
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // In a tab of its own, so the list stays as it is.
-                Link(
-                  uri: Uri.https(domain),
-                  target: LinkTarget.blank,
-                  builder: (context, open) => FilledButton.icon(
-                    onPressed: open,
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                    label: Text('Visit $domain'),
-                  ),
+                Text(domain, style: theme.textTheme.headlineSmall),
+                const SizedBox(height: 4),
+                Text(label, style: TextStyle(color: labelColour, fontWeight: FontWeight.w500)),
+                if (status == Availability.taken) ...[
+                  const SizedBox(height: 16),
+                  ..._record(context, checker.recordOf(name, tld)),
+                ],
+                if (spoken != null) ...[
+                  const SizedBox(height: 24),
+                  Text('Sounds like $spokenDomain', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  ...switch (spokenStatus!) {
+                    Availability.checking => [
+                        Text('Checking $spokenDomain…', style: TextStyle(color: colours.onSurfaceVariant)),
+                      ],
+                    Availability.free => [
+                        Text('$spokenDomain is free too. Registering both means people who hear the name and type '
+                            'the usual spelling still find you.'),
+                      ],
+                    Availability.taken => [
+                        Text('$spokenDomain is taken, so people who hear the name and type the usual spelling '
+                            'would land there.'),
+                        const SizedBox(height: 12),
+                        ..._record(context, checker.recordOf(spoken, tld)),
+                      ],
+                    Availability.unknown => [
+                        Text("Couldn't check $spokenDomain.", style: TextStyle(color: colours.error)),
+                        TextButton(onPressed: () => checker.retry(spoken, tld), child: const Text('Try again')),
+                      ],
+                  },
+                ],
+                const SizedBox(height: 20),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (status == Availability.taken) visit(domain),
+                    if (spokenStatus == Availability.taken) visit(spokenDomain, main: status != Availability.taken),
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                  ],
                 ),
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

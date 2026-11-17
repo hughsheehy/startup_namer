@@ -177,8 +177,10 @@ class DomainChecker extends ChangeNotifier {
       _registries.putIfAbsent(tld.host, () => RegistryChecker(tld.host, client: _client)..addListener(notifyListeners));
 
   /// The answer so far for `name` (letters only, like "neatchip") under [tld],
-  /// asking if it's new.
-  Availability statusOf(String name, Tld tld) => registryFor(tld).statusOf('$name.${tld.name}');
+  /// asking if it's new: [first], before the others waiting, for one the user
+  /// is looking at.
+  Availability statusOf(String name, Tld tld, {bool first = false}) =>
+      registryFor(tld).statusOf('$name.${tld.name}', first: first);
 
   /// What the registry's record says about a taken domain, if it said.
   DomainRecord? recordOf(String name, Tld tld) => registryFor(tld).recordOf('$name.${tld.name}');
@@ -276,13 +278,14 @@ class RegistryChecker extends ChangeNotifier {
   /// What the registry's record says about a taken `domain`, if it said.
   DomainRecord? recordOf(String domain) => _records[domain];
 
-  /// The answer so far for `domain` (like "neatchip.com"), asking if it's new.
-  Availability statusOf(String domain) {
+  /// The answer so far for `domain` (like "neatchip.com"), asking if it's new:
+  /// [first], ahead of the others waiting.
+  Availability statusOf(String domain, {bool first = false}) {
     final known = _found[domain];
     if (known != null) return known;
     _endings.add(tldOf(domain).name);
     _found[domain] = Availability.checking;
-    _waiting.add(domain);
+    first ? _waiting.addFirst(domain) : _waiting.add(domain);
     _next();
     return Availability.checking;
   }

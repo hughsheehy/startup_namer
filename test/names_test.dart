@@ -237,4 +237,20 @@ void main() {
     expect(styled(sameLetter: true, letter: 'b').every((name) => name.first.startsWith('b')), isTrue);
     expect(styled(sameLetter: true, word: 'volt').every((name) => name.asLowerCase.startsWith('v')), isTrue);
   });
+
+  test('a twisted name keeps its usual spelling; other names have none', () {
+    for (final name in styled(oneWord: true, twists: {Twist.iToY})) {
+      expect(Twist.iToY.apply(name.spoken!.single), name.first, reason: '$name');
+    }
+    for (final name in styled(twists: Twist.values.toSet())) {
+      final spoken = name.spoken!;
+      expect(spoken, hasLength(2));
+      final changed = [for (var i = 0; i < 2; i++) if (spoken[i] != name.words[i]) i];
+      expect(changed, hasLength(1), reason: '$name $spoken');
+      expect(isPlain(spoken[changed.single]), isTrue, reason: '$name $spoken');
+    }
+    expect(styled(word: 'link', twists: {Twist.iToY}).where((name) => name.spokenLowerCase!.contains('link')), isNotEmpty);
+    expect(styled(oneWord: true, endings: {Ending.ify}).every((name) => name.spoken == null), isTrue);
+    expect(styled().every((name) => name.spoken == null), isTrue);
+  });
 }

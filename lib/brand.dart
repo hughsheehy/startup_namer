@@ -2,6 +2,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:url_launcher/link.dart';
 
+import 'chocolate.dart';
+
 /// The LoudVector look, from the "Ket" logo: |V⟩, Dirac's notation for the state
 /// vector V, in violet on dark ink. The logo's files are in assets/logo/, copied
 /// from brand/final/ in the hughsheehy/loudvector repo.
@@ -109,7 +111,8 @@ class BrandFooter extends StatelessWidget {
         onPressed: open,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(0, 44),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          // Room above and below for the longer counter line when it wraps.
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           shape: const StadiumBorder(),
           side: BorderSide(color: colours.outlineVariant),
           backgroundColor: colours.surface,
@@ -117,7 +120,14 @@ class BrandFooter extends StatelessWidget {
           // The theme's own button text (Outfit), not a bare style that drops the font.
           textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
         ),
-        child: const Text('🍫 If you like it, buy me chocolate.'),
+        // How long the chocolate so far covers the server costs, once known (lib/chocolate.dart).
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: FutureBuilder<Chocolate?>(
+            future: Chocolate.load(),
+            builder: (context, answer) => Text(Chocolate.words(answer.data), textAlign: TextAlign.center),
+          ),
+        ),
       ),
     );
     final builtBy = Link(

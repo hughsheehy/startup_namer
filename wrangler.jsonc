@@ -1,11 +1,15 @@
 // The web build, served at startupnames.loudvector.com by a Cloudflare Worker
-// with static assets (no code of its own).
+// with static assets. Its only code (worker.js) answers /api/chocolate for the
+// footer's chocolate button; everything else is the static files.
 // Build, then deploy from this folder:
 //   python3 tool/build_web.py     (flutter build web --wasm, then stamps sw.js)
 //   npx wrangler deploy
 {
   "name": "startupnames",
+  "main": "worker.js",
   "compatibility_date": "2026-11-01",
-  "assets": { "directory": "./build/web" },
+  "assets": { "directory": "./build/web", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  // loudvector.com's Worker, which keeps the chocolate count for all of LoudVector's apps.
+  "services": [{ "binding": "LOUDVECTOR", "service": "loudvector" }],
   "routes": [{ "pattern": "startupnames.loudvector.com", "custom_domain": true }]
 }
